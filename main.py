@@ -34,29 +34,38 @@ def upsert_and_detect_changes(trials):
         last_updated = trial.get("LastUpdatePostDate")
         last_checked = datetime.utcnow().isoformat()
 
-        existing = (
+        # Fetch existing record
+        existing_response = (
             supabase.table("trials")
             .select("status")
             .eq("nct_id", nct_id)
             .maybe_single()
             .execute()
-            .data
         )
+        existing = getattr(existing_response, "data", None)
 
         if not existing:
             new_trials.append(brief_title)
         elif existing["status"] != status:
             changed_trials.append(f"{brief_title} ({existing['status']} → {status})")
 
-        supabase.table("trials").upsert({
+        # Perform upsert
+        upsert_payload = {
             "nct_id": nct_id,
             "brief_title": brief_title,
             "status": status,
             "last_updated": last_updated,
             "last_checked": last_checked
-        }).execute()
+        }
+
+        upsert_response = supabase.table("trials").upsert(upsert_payload).execute()
+        print(f"Upsert response for {nct_id}: {upsert_response}")
+
+        if not hasattr(upsert_response, "data") or upsert_response.data is None:
+            raise ValueError(f"❌ Supabase upsert failed for {nct_id}. Response: {upsert_response}")
 
     return new_trials, changed_trials
+
 
 def send_email(new_trials, changed_trials):
     subject = "🧪 Clinical Trials Update: Spinal Cord Injury"
