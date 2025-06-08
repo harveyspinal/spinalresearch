@@ -2,7 +2,7 @@ name: Daily Clinical Trial Tracker
 
 on:
   schedule:
-    - cron: "0 8 * * *" # Every day at 8am UTC
+    - cron: "0 8 * * *" # Every day at 8am UTC Harvey add
   workflow_dispatch:
 
 jobs:
