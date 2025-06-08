@@ -32,37 +32,36 @@ def upsert_and_detect_changes(trials):
     if not nct_id:
         print("⚠️ Skipping trial with missing NCTId:", trial)
         continue
-        brief_title = trial.get("BriefTitle")
-        status = trial.get("OverallStatus")
-        last_updated = trial.get("LastUpdatePostDate")
-        last_checked = datetime.utcnow().isoformat()
 
-        # Fetch existing record
-        existing_response = (
-            supabase.table("trials")
-            .select("status")
-            .eq("nct_id", nct_id)
-            .maybe_single()
-            .execute()
-        )
-        existing = getattr(existing_response, "data", None)
+    brief_title = trial.get("BriefTitle")
+    status = trial.get("OverallStatus")
+    last_updated = trial.get("LastUpdatePostDate")
+    last_checked = datetime.utcnow().isoformat()
 
-        if not existing:
-            new_trials.append(brief_title)
-        elif existing["status"] != status:
-            changed_trials.append(f"{brief_title} ({existing['status']} → {status})")
+    existing = (
+        supabase.table("trials")
+        .select("status")
+        .eq("nct_id", nct_id)
+        .maybe_single()
+        .execute()
+        .data
+    )
 
-        # Perform upsert
-        upsert_payload = {
-            "nct_id": nct_id,
-            "brief_title": brief_title,
-            "status": status,
-            "last_updated": last_updated,
-            "last_checked": last_checked
-        }
+    if not existing:
+        new_trials.append(brief_title)
+    elif existing["status"] != status:
+        changed_trials.append(f"{brief_title} ({existing['status']} → {status})")
 
-        upsert_response = supabase.table("trials").upsert(upsert_payload).execute()
-        print(f"Upsert response for {nct_id}: {upsert_response}")
+    upsert_payload = {
+        "nct_id": nct_id,
+        "brief_title": brief_title,
+        "status": status,
+        "last_updated": last_updated,
+        "last_checked": last_checked,
+    }
+
+    upsert_response = supabase.table("trials").upsert(upsert_payload).execute()
+    print(f"✅ Upserted {nct_id}: {upsert_response}")
 
         if not hasattr(upsert_response, "data") or upsert_response.data is None:
             raise ValueError(f"❌ Supabase upsert failed for {nct_id}. Response: {upsert_response}")
