@@ -28,7 +28,10 @@ def upsert_and_detect_changes(trials):
     changed_trials = []
 
     for trial in trials:
-        nct_id = trial.get("NCTId")
+    nct_id = trial.get("NCTId")
+    if not nct_id:
+        print("⚠️ Skipping trial with missing NCTId:", trial)
+        continue
         brief_title = trial.get("BriefTitle")
         status = trial.get("OverallStatus")
         last_updated = trial.get("LastUpdatePostDate")
