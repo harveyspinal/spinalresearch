@@ -8,7 +8,7 @@ SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 RESEND_API_KEY = os.environ["RESEND_API_KEY"]
 EMAIL_TO = os.environ["EMAIL_TO"]
-EMAIL_FROM = os.environ.get("EMAIL_FROM", "harvey.sihota@gmail.com")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "onboarding@resend.dev")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
