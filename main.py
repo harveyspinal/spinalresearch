@@ -3,47 +3,46 @@ import os
 from datetime import datetime
 from supabase import create_client, Client
 
-# --- Environment Variables ---
+# Env vars
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 RESEND_API_KEY = os.environ["RESEND_API_KEY"]
 EMAIL_TO = os.environ["EMAIL_TO"]
-EMAIL_FROM = os.environ.get("EMAIL_FROM", "clinical-trials@yourdomain.com")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "harvey.sihota@gmail.com")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# --- Fetch Trials from ClinicalTrials.gov ---
 def fetch_trials():
     url = "https://clinicaltrials.gov/api/v2/studies"
     params = {
         "query.term": "spinal cord injury",
         "pageSize": 100,
-        "fields": "NCTId,BriefTitle,OverallStatus,LastUpdatePostDate",
+        "fields": "protocolSection.identificationModule.nctId,protocolSection.identificationModule.briefTitle,protocolSection.statusModule.overallStatus,protocolSection.statusModule.lastUpdatePostDateStruct.date",
     }
     response = requests.get(url, params=params)
     response.raise_for_status()
-    studies = response.json().get("studies", [])
-    print(f"📥 Fetched {len(studies)} trials.")
-    return studies
+    data = response.json()
+    trials = data.get("studies", [])
+    print(f"📥 Fetched {len(trials)} trials.")
+    return trials
 
-# --- Upsert Trials & Detect Changes ---
 def upsert_and_detect_changes(trials):
     new_trials = []
     changed_trials = []
 
     for trial in trials:
-        nct_id = trial.get("NCTId")
-        if not nct_id:
-            print("⚠️ Skipping trial with missing NCTId:", trial)
+        try:
+            nct_id = trial["protocolSection"]["identificationModule"]["nctId"]
+            brief_title = trial["protocolSection"]["identificationModule"]["briefTitle"]
+            status = trial["protocolSection"]["statusModule"]["overallStatus"]
+            last_updated = trial["protocolSection"]["statusModule"]["lastUpdatePostDateStruct"]["date"]
+        except KeyError as e:
+            print(f"⚠️ Skipping trial due to missing field {e}: {trial}")
             continue
 
-        brief_title = trial.get("BriefTitle")
-        status = trial.get("OverallStatus")
-        last_updated = trial.get("LastUpdatePostDate")
         last_checked = datetime.utcnow().isoformat()
 
-        # Safely fetch existing trial by NCTId
-        result = (
+        existing = (
             supabase.table("trials")
             .select("status")
             .eq("nct_id", nct_id)
@@ -51,29 +50,25 @@ def upsert_and_detect_changes(trials):
             .execute()
         )
 
-        existing = result.data if result and hasattr(result, "data") else None
+        existing_data = getattr(existing, "data", None)
 
-        if not existing:
-            print(f"🆕 New trial: {brief_title}")
+        if not existing_data:
             new_trials.append(brief_title)
-        elif existing["status"] != status:
-            print(f"🔄 Status change: {brief_title} ({existing['status']} → {status})")
-            changed_trials.append(f"{brief_title} ({existing['status']} → {status})")
+        elif existing_data["status"] != status:
+            changed_trials.append(f"{brief_title} ({existing_data['status']} → {status})")
 
-        # Upsert trial record
         upsert_payload = {
             "nct_id": nct_id,
             "brief_title": brief_title,
             "status": status,
             "last_updated": last_updated,
-            "last_checked": last_checked,
+            "last_checked": last_checked
         }
 
         supabase.table("trials").upsert(upsert_payload).execute()
 
     return new_trials, changed_trials
 
-# --- Email Summary via Resend ---
 def send_email(new_trials, changed_trials):
     subject = "🧪 Clinical Trials Update: Spinal Cord Injury"
     lines = []
@@ -99,9 +94,9 @@ def send_email(new_trials, changed_trials):
             "html": html,
         },
     )
-    print(f"📤 Email sent with status code {response.status_code}")
 
-# --- Entrypoint ---
+    print(f"📧 Email sent. Status code: {response.status_code}")
+
 def main():
     trials = fetch_trials()
     new_trials, changed_trials = upsert_and_detect_changes(trials)
