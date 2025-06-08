@@ -100,6 +100,9 @@ def send_email(new_trials, changed_trials):
 def main():
     trials = fetch_trials()
     new_trials, changed_trials = upsert_and_detect_changes(trials)
+    print("📨 Sending email...")
+    print("New trials:", new_trials)
+    print("Changed trials:", changed_trials)
     send_email(new_trials, changed_trials)
 
 if __name__ == "__main__":
