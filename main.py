@@ -28,14 +28,17 @@ def upsert_and_detect_changes(trials):
     changed_trials = []
 
     for trial in trials:
-        nct_id = trial.get("NCTId")
+        ident = trial.get("protocolSection", {}).get("identificationModule", {})
+        status_info = trial.get("protocolSection", {}).get("statusModule", {})
+
+        nct_id = ident.get("nctId")
         if not nct_id:
             print("⚠️ Skipping trial with missing NCTId:", trial)
             continue
 
-        brief_title = trial.get("BriefTitle")
-        status = trial.get("OverallStatus")
-        last_updated = trial.get("LastUpdatePostDate")
+        brief_title = ident.get("briefTitle")
+        status = status_info.get("overallStatus")
+        last_updated = status_info.get("lastUpdatePostDateStruct", {}).get("date")
         last_checked = datetime.utcnow().isoformat()
 
         existing = (
@@ -57,7 +60,7 @@ def upsert_and_detect_changes(trials):
             "brief_title": brief_title,
             "status": status,
             "last_updated": last_updated,
-            "last_checked": last_checked
+            "last_checked": last_checked,
         }
 
         upsert_response = supabase.table("trials").upsert(upsert_payload).execute()
