@@ -19,13 +19,19 @@ def fetch_trials():
     url = "https://clinicaltrials.gov/api/v2/studies"
     params = {
         "query.term": "spinal cord injury",
-        "fields": "protocolSection.identificationModule.nctId,"
-                  "protocolSection.identificationModule.briefTitle,"
-                  "protocolSection.statusModule.overallStatus,"
-                  "protocolSection.statusModule.lastUpdatePostDateStruct.date",
+        "fields": "protocolSection",
         "pageSize": 100,
         "page": 1
     }
+
+    response = requests.get(url, params=params)
+    print("Request URL:", response.url)
+    response.raise_for_status()
+
+    data = response.json()
+    studies = data.get("studies", [])
+    print(f"✅ Retrieved {len(studies)} studies.")
+    return studies
 
     response = requests.get(url, params=params)
     print("Request URL:", response.url)  # Helpful for debugging
