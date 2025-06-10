@@ -15,34 +15,16 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def fetch_trials():
     print("📥 Fetching first page...")
-    base_url = "https://clinicaltrials.gov/api/v2/studies"
+    url = "https://clinicaltrials.gov/api/v2/studies"
     params = {
-    "query": "spinal cord injury",
-    "pageSize": 100,
-    "page": 1,
-    "fields": "protocolSection.identificationModule.nctId,protocolSection.identificationModule.briefTitle,protocolSection.statusModule.overallStatus,protocolSection.statusModule.lastUpdatePostDateStruct.date"
+        "query": "spinal cord injury",
+        "pageSize": 100,
+        "page": 1
+        # Removed the 'fields' parameter
     }
-
-
-    response = requests.get(base_url, params=params)
+    response = requests.get(url, params=params)
     response.raise_for_status()
-    data = response.json()
-
-    total_count = data.get("totalCount", 0)
-    studies = data.get("studies", [])
-    total_pages = math.ceil(total_count / 100)
-
-    print(f"ℹ️ Total trials: {total_count} across {total_pages} pages")
-
-    for page in range(2, total_pages + 1):
-        print(f"➡️ Fetching page {page}")
-        params["page"] = page
-        response = requests.get(base_url, params=params)
-        response.raise_for_status()
-        studies += response.json().get("studies", [])
-
-    print(f"✅ Total trials fetched: {len(studies)}")
-    return studies
+    return response.json().get("studies", [])
 
 def upsert_and_detect_changes(trials):
     new_trials = []
