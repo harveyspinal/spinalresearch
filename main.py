@@ -106,25 +106,30 @@ def upsert_and_detect_changes(trials):
             continue
 
         try:
-            existing = (
+            # Query existing trial with better error handling
+            result = (
                 supabase.table("trials")
                 .select("status")
                 .eq("nct_id", nct_id)
                 .maybe_single()
                 .execute()
-                .data
             )
+            
+            existing = result.data if result else None
 
             if not existing:
                 new_trials.append(brief_title)
-            elif existing["status"] != status:
-                changed_trials.append(f"{brief_title} ({existing['status']} → {status})")
+            elif existing.get("status") != status:
+                changed_trials.append(f"{brief_title} ({existing.get('status', 'Unknown')} → {status})")
+
+            # Handle empty date strings - convert to None for database
+            processed_last_updated = last_updated if last_updated and last_updated.strip() else None
 
             supabase.table("trials").upsert({
                 "nct_id": nct_id,
                 "brief_title": brief_title,
                 "status": status,
-                "last_updated": last_updated,
+                "last_updated": processed_last_updated,
                 "last_checked": last_checked
             }).execute()
             
