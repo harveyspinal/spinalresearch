@@ -17,9 +17,9 @@ def fetch_trials():
     print("📥 Fetching first page...")
     base_url = "https://clinicaltrials.gov/api/v2/studies"
     params = {
-        "query.term": "spinal cord injury",
-        "pageSize": 100,
-        "page": 1,
+    "query": "spinal cord injury",  # ← FIXED
+    "pageSize": 100,
+    "page": 1,
     }
 
     response = requests.get(base_url, params=params)
