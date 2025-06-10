@@ -17,11 +17,12 @@ def fetch_trials():
     print("📥 Fetching first page...")
     base_url = "https://clinicaltrials.gov/api/v2/studies"
     params = {
-    "query": "spinal cord injury",  # ← FIXED
+    "query": "spinal cord injury",
     "pageSize": 100,
     "page": 1,
-    "fields": "NCTId,BriefTitle,OverallStatus,LastUpdatePostDate"
+    "fields": "protocolSection.identificationModule.nctId,protocolSection.identificationModule.briefTitle,protocolSection.statusModule.overallStatus,protocolSection.statusModule.lastUpdatePostDateStruct.date"
     }
+
 
     response = requests.get(base_url, params=params)
     response.raise_for_status()
