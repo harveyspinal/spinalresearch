@@ -16,15 +16,13 @@ def fetch_trials():
     print("📥 Fetching from ClinicalTrials.gov v2 API...")
 
     url = "https://clinicaltrials.gov/api/v2/studies"
-    payload = {
-        "query": {
-            "term": "spinal cord injury"
-        },
-        "page": 1,
-        "pageSize": 100
+    params = {
+        "query.term": "spinal cord injury",
+        "pageSize": 100,
+        "page": 1
     }
 
-    response = requests.post(url, json=payload)
+    response = requests.get(url, params=params)
     print("Request URL:", response.url)
     response.raise_for_status()
 
