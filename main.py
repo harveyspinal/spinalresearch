@@ -19,7 +19,6 @@ def fetch_trials():
     url = "https://clinicaltrials.gov/api/v2/studies"
     params = {
         "query.term": "spinal cord injury",
-        "fields": "protocolSection",
         "pageSize": 100,
         "page": 1
     }
