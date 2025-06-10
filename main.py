@@ -1,26 +1,27 @@
 import requests
 import os
 from datetime import datetime
-import math
 from supabase import create_client, Client
 
-# 🔐 Environment Variables
+# Environment variables
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 RESEND_API_KEY = os.environ["RESEND_API_KEY"]
 EMAIL_TO = os.environ["EMAIL_TO"]
-EMAIL_FROM = os.environ.get("EMAIL_FROM", "onboarding@resend.dev")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "clinical-trials@yourdomain.com")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def fetch_trials():
-    print("📥 Fetching first page...")
+    print("📥 Fetching from v1 API...")
 
-    url = "https://clinicaltrials.gov/api/v2/studies"
+    url = "https://clinicaltrials.gov/api/query/study_fields"
     params = {
-        "query": "spinal cord injury",
-        "pageSize": 100,
-        "page": 1
+        "expr": "spinal cord injury",
+        "fields": "NCTId,BriefTitle,OverallStatus,LastUpdatePostDate",
+        "min_rnk": 1,
+        "max_rnk": 100,
+        "fmt": "JSON"
     }
 
     response = requests.get(url, params=params)
@@ -28,56 +29,48 @@ def fetch_trials():
     response.raise_for_status()
 
     data = response.json()
-    studies = data.get("studies", [])
-    print(f"✅ Retrieved {len(studies)} studies.")
+    studies = data["StudyFieldsResponse"]["StudyFields"]
+    print(f"✅ Retrieved {len(studies)} trials.")
     return studies
-
-    response = requests.get(url, params=params)
-    print("Request URL:", response.url)  # Helpful for debugging
-    response.raise_for_status()
-    return response.json().get("studies", [])
 
 def upsert_and_detect_changes(trials):
     new_trials = []
     changed_trials = []
-    now = datetime.utcnow().isoformat()
 
     for trial in trials:
-        section = trial.get("protocolSection", {})
-        id_mod = section.get("identificationModule", {})
-        status_mod = section.get("statusModule", {})
-
-        nct_id = id_mod.get("nctId")
-        brief_title = id_mod.get("briefTitle")
-        status = status_mod.get("overallStatus")
-        last_updated = status_mod.get("lastUpdatePostDateStruct", {}).get("date")
+        nct_id = trial.get("NCTId", [None])[0]
+        brief_title = trial.get("BriefTitle", [None])[0]
+        status = trial.get("OverallStatus", [None])[0]
+        last_updated = trial.get("LastUpdatePostDate", [None])[0]
+        last_checked = datetime.utcnow().isoformat()
 
         if not nct_id:
             print(f"⚠️ Skipping trial with missing NCTId: {trial}")
             continue
 
-        response = supabase.table("trials") \
-            .select("status") \
-            .eq("nct_id", nct_id) \
-            .maybe_single() \
+        existing = (
+            supabase.table("trials")
+            .select("status")
+            .eq("nct_id", nct_id)
+            .maybe_single()
             .execute()
-
-        existing = getattr(response, "data", None)
+            .data
+        )
 
         if not existing:
-            print(f"🆕 New trial: {nct_id} - {brief_title}")
+            print(f"🆕 New trial: {brief_title}")
             new_trials.append(brief_title)
         elif existing["status"] != status:
-            print(f"🔄 Status changed for {nct_id}: {existing['status']} → {status}")
+            print(f"🔄 Status change: {brief_title} ({existing['status']} → {status})")
             changed_trials.append(f"{brief_title} ({existing['status']} → {status})")
 
-        # Upsert data into Supabase
+        # Upsert trial
         supabase.table("trials").upsert({
             "nct_id": nct_id,
             "brief_title": brief_title,
             "status": status,
             "last_updated": last_updated,
-            "last_checked": now
+            "last_checked": last_checked
         }).execute()
 
     return new_trials, changed_trials
@@ -85,7 +78,6 @@ def upsert_and_detect_changes(trials):
 def send_email(new_trials, changed_trials):
     subject = "🧪 Clinical Trials Update: Spinal Cord Injury"
     lines = []
-
     if new_trials:
         lines.append("🆕 New Trials:\n" + "\n".join(f"- {t}" for t in new_trials))
     if changed_trials:
@@ -95,7 +87,6 @@ def send_email(new_trials, changed_trials):
 
     html = "<br>".join(line.replace("\n", "<br>") for line in lines)
 
-    print("📨 Sending email...")
     response = requests.post(
         "https://api.resend.com/emails",
         headers={
