@@ -1,9 +1,10 @@
 import requests
 import os
 from datetime import datetime
+import math
 from supabase import create_client, Client
 
-# Env vars
+# 🔐 Environment Variables
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 RESEND_API_KEY = os.environ["RESEND_API_KEY"]
@@ -12,35 +13,31 @@ EMAIL_FROM = os.environ.get("EMAIL_FROM", "onboarding@resend.dev")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-import math
-
 def fetch_trials():
+    print("📥 Fetching first page...")
     base_url = "https://clinicaltrials.gov/api/v2/studies"
     params = {
         "query.term": "spinal cord injury",
         "pageSize": 100,
-        "fields": "NCTId,BriefTitle,OverallStatus,LastUpdatePostDate",
         "page": 1,
     }
 
-    print("📥 Fetching first page...")
     response = requests.get(base_url, params=params)
     response.raise_for_status()
     data = response.json()
+
     total_count = data.get("totalCount", 0)
     studies = data.get("studies", [])
-
     total_pages = math.ceil(total_count / 100)
+
     print(f"ℹ️ Total trials: {total_count} across {total_pages} pages")
 
-    # Fetch remaining pages
     for page in range(2, total_pages + 1):
         print(f"➡️ Fetching page {page}")
         params["page"] = page
         response = requests.get(base_url, params=params)
         response.raise_for_status()
-        data = response.json()
-        studies.extend(data.get("studies", []))
+        studies += response.json().get("studies", [])
 
     print(f"✅ Total trials fetched: {len(studies)}")
     return studies
@@ -48,49 +45,52 @@ def fetch_trials():
 def upsert_and_detect_changes(trials):
     new_trials = []
     changed_trials = []
+    now = datetime.utcnow().isoformat()
 
     for trial in trials:
-        try:
-            nct_id = trial["protocolSection"]["identificationModule"]["nctId"]
-            brief_title = trial["protocolSection"]["identificationModule"]["briefTitle"]
-            status = trial["protocolSection"]["statusModule"]["overallStatus"]
-            last_updated = trial["protocolSection"]["statusModule"]["lastUpdatePostDateStruct"]["date"]
-        except KeyError as e:
-            print(f"⚠️ Skipping trial due to missing field {e}: {trial}")
+        section = trial.get("protocolSection", {})
+        id_mod = section.get("identificationModule", {})
+        status_mod = section.get("statusModule", {})
+
+        nct_id = id_mod.get("nctId")
+        brief_title = id_mod.get("briefTitle")
+        status = status_mod.get("overallStatus")
+        last_updated = status_mod.get("lastUpdatePostDateStruct", {}).get("date")
+
+        if not nct_id:
+            print(f"⚠️ Skipping trial with missing NCTId: {trial}")
             continue
 
-        last_checked = datetime.utcnow().isoformat()
-
-        existing = (
-            supabase.table("trials")
-            .select("status")
-            .eq("nct_id", nct_id)
-            .maybe_single()
+        response = supabase.table("trials") \
+            .select("status") \
+            .eq("nct_id", nct_id) \
+            .maybe_single() \
             .execute()
-        )
 
-        existing_data = getattr(existing, "data", None)
+        existing = getattr(response, "data", None)
 
-        if not existing_data:
+        if not existing:
+            print(f"🆕 New trial: {nct_id} - {brief_title}")
             new_trials.append(brief_title)
-        elif existing_data["status"] != status:
-            changed_trials.append(f"{brief_title} ({existing_data['status']} → {status})")
+        elif existing["status"] != status:
+            print(f"🔄 Status changed for {nct_id}: {existing['status']} → {status}")
+            changed_trials.append(f"{brief_title} ({existing['status']} → {status})")
 
-        upsert_payload = {
+        # Upsert data into Supabase
+        supabase.table("trials").upsert({
             "nct_id": nct_id,
             "brief_title": brief_title,
             "status": status,
             "last_updated": last_updated,
-            "last_checked": last_checked
-        }
-
-        supabase.table("trials").upsert(upsert_payload).execute()
+            "last_checked": now
+        }).execute()
 
     return new_trials, changed_trials
 
 def send_email(new_trials, changed_trials):
     subject = "🧪 Clinical Trials Update: Spinal Cord Injury"
     lines = []
+
     if new_trials:
         lines.append("🆕 New Trials:\n" + "\n".join(f"- {t}" for t in new_trials))
     if changed_trials:
@@ -100,6 +100,7 @@ def send_email(new_trials, changed_trials):
 
     html = "<br>".join(line.replace("\n", "<br>") for line in lines)
 
+    print("📨 Sending email...")
     response = requests.post(
         "https://api.resend.com/emails",
         headers={
@@ -113,15 +114,11 @@ def send_email(new_trials, changed_trials):
             "html": html,
         },
     )
-
     print(f"📧 Email sent. Status code: {response.status_code}")
 
 def main():
     trials = fetch_trials()
     new_trials, changed_trials = upsert_and_detect_changes(trials)
-    print("📨 Sending email...")
-    print("New trials:", new_trials)
-    print("Changed trials:", changed_trials)
     send_email(new_trials, changed_trials)
 
 if __name__ == "__main__":
