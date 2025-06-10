@@ -20,6 +20,7 @@ def fetch_trials():
     "query": "spinal cord injury",  # ← FIXED
     "pageSize": 100,
     "page": 1,
+    "fields": "NCTId,BriefTitle,OverallStatus,LastUpdatePostDate"
     }
 
     response = requests.get(base_url, params=params)
