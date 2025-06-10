@@ -15,13 +15,20 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def fetch_trials():
     print("📥 Fetching first page...")
+
     url = "https://clinicaltrials.gov/api/v2/studies"
     params = {
-        "query.term": "spinal cord injury",  # ✅ Correct query key
+        "query.term": "spinal cord injury",
+        "fields": "protocolSection.identificationModule.nctId,"
+                  "protocolSection.identificationModule.briefTitle,"
+                  "protocolSection.statusModule.overallStatus,"
+                  "protocolSection.statusModule.lastUpdatePostDateStruct.date",
         "pageSize": 100,
         "page": 1
     }
+
     response = requests.get(url, params=params)
+    print("Request URL:", response.url)  # Helpful for debugging
     response.raise_for_status()
     return response.json().get("studies", [])
 
