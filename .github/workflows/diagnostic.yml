@@ -1,0 +1,19 @@
+# .github/workflows/diagnostic.yml
+name: Diagnostic Run
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: Install Requests
+        run: pip install requests
+      - name: Run diagnostic
+        run: python diagnostic.py
