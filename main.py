@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 from supabase import create_client, Client
 
-# 🌍 Env vars
+# 🔐 Environment variables
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_KEY"]
 RESEND_API_KEY = os.environ["RESEND_API_KEY"]
@@ -12,42 +12,40 @@ EMAIL_FROM = os.environ.get("EMAIL_FROM", "onboarding@resend.dev")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# 📦 Fields we want from the API
+FIELDS = ["NCTId", "BriefTitle", "OverallStatus", "LastUpdatePostDate"]
+PAGE_SIZE = 100  # Max page size
+
 def fetch_trials():
-    print("📥 Fetching from ClinicalTrials.gov v2 API...")
+    print("📥 Fetching from ClinicalTrials.gov v1 API...")
 
     all_trials = []
-    page = 1
-    page_size = 100
+    base_url = "https://clinicaltrials.gov/api/query/study_fields"
 
+    rank = 1
     while True:
-        url = "https://clinicaltrials.gov/api/v2/search"
-        payload = {
-            "query": {
-                "term": "spinal cord injury"
-            },
-            "include": ["protocolSection"],
-            "pageSize": page_size,
-            "pageNumber": page
+        params = {
+            "expr": "spinal cord injury",
+            "fields": ",".join(FIELDS),
+            "min_rnk": rank,
+            "max_rnk": rank + PAGE_SIZE - 1,
+            "fmt": "JSON"
         }
 
-        print(f"🔄 Requesting page {page}...")
-        response = requests.post(url, json=payload)
+        response = requests.get(base_url, params=params)
+        print(f"🔄 Fetching rank {rank} to {rank + PAGE_SIZE - 1}...")
         print("Request URL:", response.url)
         response.raise_for_status()
 
         data = response.json()
-        studies = data.get("studies", [])
-        print(f"📦 Page {page}: Retrieved {len(studies)} studies")
+        studies = data["StudyFieldsResponse"]["StudyFields"]
+        print(f"✅ Retrieved {len(studies)} trials")
 
         if not studies:
             break
 
         all_trials.extend(studies)
-
-        if len(studies) < page_size:
-            break
-
-        page += 1
+        rank += PAGE_SIZE
 
     print(f"✅ Total trials fetched: {len(all_trials)}")
     return all_trials
@@ -58,14 +56,13 @@ def upsert_and_detect_changes(trials):
 
     for trial in trials:
         try:
-            section = trial["protocolSection"]
-            nct_id = section["identificationModule"]["nctId"]
-            brief_title = section["identificationModule"]["briefTitle"]
-            status = section["statusModule"]["overallStatus"]
-            last_updated = section["statusModule"]["lastUpdatePostDateStruct"]["date"]
+            nct_id = trial["NCTId"][0]
+            brief_title = trial["BriefTitle"][0]
+            status = trial["OverallStatus"][0]
+            last_updated = trial["LastUpdatePostDate"][0]
             last_checked = datetime.utcnow().isoformat()
-        except KeyError as e:
-            print(f"⚠️ Skipping trial with missing field: {e}")
+        except (KeyError, IndexError) as e:
+            print(f"⚠️ Skipping trial due to missing data: {e}")
             continue
 
         existing = (
