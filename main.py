@@ -12,19 +12,38 @@ EMAIL_FROM = os.environ.get("EMAIL_FROM", "onboarding@resend.dev")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+import math
+
 def fetch_trials():
-    url = "https://clinicaltrials.gov/api/v2/studies"
+    base_url = "https://clinicaltrials.gov/api/v2/studies"
     params = {
         "query.term": "spinal cord injury",
         "pageSize": 100,
-        "fields": "protocolSection.identificationModule.nctId,protocolSection.identificationModule.briefTitle,protocolSection.statusModule.overallStatus,protocolSection.statusModule.lastUpdatePostDateStruct.date",
+        "fields": "NCTId,BriefTitle,OverallStatus,LastUpdatePostDate",
+        "page": 1,
     }
-    response = requests.get(url, params=params)
+
+    print("📥 Fetching first page...")
+    response = requests.get(base_url, params=params)
     response.raise_for_status()
     data = response.json()
-    trials = data.get("studies", [])
-    print(f"📥 Fetched {len(trials)} trials.")
-    return trials
+    total_count = data.get("totalCount", 0)
+    studies = data.get("studies", [])
+
+    total_pages = math.ceil(total_count / 100)
+    print(f"ℹ️ Total trials: {total_count} across {total_pages} pages")
+
+    # Fetch remaining pages
+    for page in range(2, total_pages + 1):
+        print(f"➡️ Fetching page {page}")
+        params["page"] = page
+        response = requests.get(base_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        studies.extend(data.get("studies", []))
+
+    print(f"✅ Total trials fetched: {len(studies)}")
+    return studies
 
 def upsert_and_detect_changes(trials):
     new_trials = []
