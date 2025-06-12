@@ -107,57 +107,88 @@ def fetch_isrctn():
         # Parse XML response
         root = ET.fromstring(response.content)
         
-        # Find all trial elements in the XML
+        # Find all trial elements in the XML - improved parsing
         trials_found = 0
+        
+        # Look for different possible XML structures
         for trial_elem in root.iter():
-            if 'isrctn' in trial_elem.tag.lower() or 'trial' in trial_elem.tag.lower():
-                try:
-                    # Extract trial data from XML structure
-                    trial_id = ""
-                    title = ""
-                    status = ""
-                    last_updated = ""
-                    
-                    # Look for ISRCTN ID
+            # Skip if this element doesn't seem to contain trial data
+            if not any(child.text for child in trial_elem):
+                continue
+                
+            try:
+                # Extract trial data from XML structure
+                trial_id = ""
+                title = ""
+                status = ""
+                last_updated = ""
+                
+                # More targeted search for ISRCTN ID
+                for elem in trial_elem.iter():
+                    if elem.text and elem.text.strip():
+                        text_content = elem.text.strip()
+                        # Look for ISRCTN pattern
+                        if 'ISRCTN' in text_content and text_content.startswith('ISRCTN'):
+                            trial_id = text_content
+                        elif elem.tag.lower() in ['isrctn', 'trial_id', 'id'] and 'ISRCTN' in text_content:
+                            trial_id = text_content
+                        elif not trial_id and text_content.isdigit() and len(text_content) == 8:
+                            # Looks like an ISRCTN number without prefix
+                            trial_id = f"ISRCTN{text_content}"
+                
+                # Look for title - more comprehensive search
+                for elem in trial_elem.iter():
+                    if elem.text and elem.text.strip() and not title:
+                        text_content = elem.text.strip()
+                        if len(text_content) > 10 and not text_content.startswith('ISRCTN') and not text_content.isdigit():
+                            # This looks like a title
+                            if any(word in elem.tag.lower() for word in ['title', 'brief', 'name', 'summary']):
+                                title = text_content
+                                break
+                
+                # If we still don't have a title, take the first substantial text
+                if not title:
                     for elem in trial_elem.iter():
-                        if 'isrctn' in elem.tag.lower() and elem.text:
-                            trial_id = elem.text
-                            break
+                        if elem.text and elem.text.strip():
+                            text_content = elem.text.strip()
+                            if len(text_content) > 20 and not text_content.startswith('ISRCTN') and not text_content.isdigit():
+                                title = text_content
+                                break
+                
+                # Look for status
+                for elem in trial_elem.iter():
+                    if elem.text and 'status' in elem.tag.lower():
+                        status = elem.text.strip()
+                        break
+                
+                # Look for date - more flexible
+                for elem in trial_elem.iter():
+                    if elem.text and any(word in elem.tag.lower() for word in ['date', 'updated', 'edited', 'modified']):
+                        last_updated = elem.text.strip()
+                        break
+                
+                if trial_id and title:  # Only process if we have essential data
+                    # Ensure ISRCTN ID has proper format for URL
+                    if trial_id.startswith('ISRCTN'):
+                        clean_trial_id = trial_id
+                    else:
+                        clean_trial_id = f"ISRCTN{trial_id}"
                     
-                    # Look for title
-                    for elem in trial_elem.iter():
-                        if any(word in elem.tag.lower() for word in ['title', 'brief']) and elem.text:
-                            title = elem.text
-                            break
+                    trial_data = {
+                        "trial_id": clean_trial_id,
+                        "title": title,
+                        "status": status or "Unknown",
+                        "last_updated": last_updated or "",
+                        "source": "isrctn",
+                        "url": f"https://www.isrctn.com/{clean_trial_id}"
+                    }
                     
-                    # Look for status
-                    for elem in trial_elem.iter():
-                        if 'status' in elem.tag.lower() and elem.text:
-                            status = elem.text
-                            break
+                    all_trials.append(trial_data)
+                    trials_found += 1
                     
-                    # Look for date
-                    for elem in trial_elem.iter():
-                        if any(word in elem.tag.lower() for word in ['date', 'updated', 'edited']) and elem.text:
-                            last_updated = elem.text
-                            break
-                    
-                    if trial_id and title:  # Only process if we have essential data
-                        trial_data = {
-                            "trial_id": trial_id,
-                            "title": title,
-                            "status": status or "Unknown",
-                            "last_updated": last_updated or "",
-                            "source": "isrctn",
-                            "url": f"https://www.isrctn.com/{trial_id}"
-                        }
-                        
-                        all_trials.append(trial_data)
-                        trials_found += 1
-                        
-                except Exception as e:
-                    print(f"⚠️ Error processing ISRCTN trial: {e}")
-                    continue
+            except Exception as e:
+                print(f"⚠️ Error processing ISRCTN trial: {e}")
+                continue
         
         print(f"✅ ISRCTN - Retrieved {trials_found} trials")
         
