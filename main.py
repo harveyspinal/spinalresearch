@@ -191,16 +191,19 @@ def upsert_and_detect_changes(trials):
             continue
 
         try:
-            # Query existing trial
-            result = (
-                supabase.table("trials")
-                .select("status, source")
-                .eq("trial_id", trial_id)
-                .maybe_single()
-                .execute()
-            )
-            
-            existing = result.data if result else None
+            # Query existing trial with better error handling
+            try:
+                result = (
+                    supabase.table("trials")
+                    .select("status, source")
+                    .eq("trial_id", trial_id)
+                    .maybe_single()
+                    .execute()
+                )
+                existing = result.data if result and result.data else None
+            except Exception as query_error:
+                print(f"⚠️ Query error for trial {trial_id}: {query_error}")
+                existing = None
 
             # Create detailed trial info dictionary
             trial_info = {
@@ -221,16 +224,28 @@ def upsert_and_detect_changes(trials):
             # Handle empty date strings - convert to None for database
             processed_last_updated = last_updated if last_updated and last_updated.strip() else None
 
-            # Upsert to database with source information
-            supabase.table("trials").upsert({
+            # Try upsert with better error handling and retry logic
+            upsert_data = {
                 "trial_id": trial_id,
-                "title": title,
-                "status": status,
+                "title": title[:500] if title else "",  # Truncate title if too long
+                "status": status[:100] if status else "",  # Truncate status if too long
                 "last_updated": processed_last_updated,
                 "source": source,
                 "url": url,
                 "last_checked": last_checked
-            }).execute()
+            }
+            
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    result = supabase.table("trials").upsert(upsert_data).execute()
+                    break  # Success, exit retry loop
+                except Exception as upsert_error:
+                    if attempt == max_retries - 1:  # Last attempt
+                        print(f"⚠️ Database upsert failed for trial {trial_id} after {max_retries} attempts: {upsert_error}")
+                    else:
+                        print(f"⚠️ Database upsert attempt {attempt + 1} failed for trial {trial_id}, retrying...")
+                        time.sleep(1)  # Wait before retry
             
         except Exception as e:
             print(f"⚠️ Database error for trial {trial_id}: {e}")
