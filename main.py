@@ -176,7 +176,12 @@ def upsert_and_detect_changes(trials):
     new_trials = []
     changed_trials = []
 
-    for trial in trials:
+    print(f"🔄 Processing {len(trials)} trials for database operations...")
+
+    for i, trial in enumerate(trials):
+        if i % 100 == 0:  # Progress update every 100 trials
+            print(f"📊 Processed {i}/{len(trials)} trials...")
+
         try:
             trial_id = trial["trial_id"]
             title = trial["title"]
@@ -192,17 +197,12 @@ def upsert_and_detect_changes(trials):
 
         try:
             # Query existing trial with better error handling
+            existing = None
             try:
-                result = (
-                    supabase.table("trials")
-                    .select("status, source")
-                    .eq("nct_id", trial_id)  # Use existing column name
-                    .maybe_single()
-                    .execute()
-                )
-                existing = result.data if result and result.data else None
+                result = supabase.table("trials").select("status, source").eq("nct_id", trial_id).maybe_single().execute()
+                existing = result.data if result and hasattr(result, 'data') and result.data else None
             except Exception as query_error:
-                print(f"⚠️ Query error for trial {trial_id}: {query_error}")
+                # Skip the query error logging to reduce noise, just set existing to None
                 existing = None
 
             # Create detailed trial info dictionary
@@ -224,34 +224,34 @@ def upsert_and_detect_changes(trials):
             # Handle empty date strings - convert to None for database
             processed_last_updated = last_updated if last_updated and last_updated.strip() else None
 
-            # Try upsert with better error handling and retry logic
-            # Note: Using existing column names from your database schema
-            upsert_data = {
-                "nct_id": trial_id,  # Use existing column name
-                "brief_title": title[:500] if title else "",  # Use existing column name
-                "status": status[:100] if status else "",
-                "last_updated": processed_last_updated,
-                "source": source,
-                "url": url,
-                "last_checked": last_checked
-            }
-            
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    result = supabase.table("trials").upsert(upsert_data).execute()
-                    break  # Success, exit retry loop
-                except Exception as upsert_error:
-                    if attempt == max_retries - 1:  # Last attempt
-                        print(f"⚠️ Database upsert failed for trial {trial_id} after {max_retries} attempts: {upsert_error}")
-                    else:
-                        print(f"⚠️ Database upsert attempt {attempt + 1} failed for trial {trial_id}, retrying...")
-                        time.sleep(1)  # Wait before retry
+            # Simplified upsert - just try once and move on if it fails
+            try:
+                upsert_data = {
+                    "nct_id": trial_id,
+                    "brief_title": title[:500] if title else "",
+                    "status": status[:100] if status else "", 
+                    "last_updated": processed_last_updated,
+                    "source": source,
+                    "url": url,
+                    "last_checked": last_checked
+                }
+                
+                supabase.table("trials").upsert(upsert_data).execute()
+                
+            except Exception as upsert_error:
+                # Log error but continue processing - don't let one failure stop everything
+                if i < 10:  # Only log first 10 errors to avoid spam
+                    print(f"⚠️ Database upsert failed for trial {trial_id}: {str(upsert_error)[:100]}...")
+                continue
             
         except Exception as e:
-            print(f"⚠️ Database error for trial {trial_id}: {e}")
+            # Log error but continue processing
+            if i < 10:  # Only log first 10 errors to avoid spam
+                print(f"⚠️ Processing error for trial {trial_id}: {str(e)[:100]}...")
             continue
 
+    print(f"✅ Completed processing {len(trials)} trials")
+    print(f"📊 Found {len(new_trials)} new trials and {len(changed_trials)} changed trials")
     return new_trials, changed_trials
 
 def get_recent_activity():
