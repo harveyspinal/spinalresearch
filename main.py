@@ -125,6 +125,66 @@ def get_recent_activity():
     except Exception as e:
         print(f"⚠️ Error fetching recent activity: {e}")
         return []
+
+def upsert_and_detect_changes(trials):
+    """Upsert trials and detect changes - return detailed trial info"""
+    new_trials = []
+    changed_trials = []
+
+    for trial in trials:
+        try:
+            nct_id = trial["NCTId"][0]
+            brief_title = trial["BriefTitle"][0]
+            status = trial["OverallStatus"][0]
+            last_updated = trial["LastUpdatePostDate"][0]
+            last_checked = datetime.utcnow().isoformat()
+        except (KeyError, IndexError) as e:
+            print(f"⚠️ Skipping trial due to missing data: {e}")
+            continue
+
+        try:
+            # Query existing trial with better error handling
+            result = (
+                supabase.table("trials")
+                .select("status")
+                .eq("nct_id", nct_id)
+                .maybe_single()
+                .execute()
+            )
+            
+            existing = result.data if result else None
+
+            # Create detailed trial info dictionary
+            trial_info = {
+                "nct_id": nct_id,
+                "brief_title": brief_title,
+                "status": status,
+                "last_updated": last_updated if last_updated and last_updated.strip() else "Not specified",
+                "url": f"https://clinicaltrials.gov/study/{nct_id}"
+            }
+
+            if not existing:
+                new_trials.append(trial_info)
+            elif existing.get("status") != status:
+                trial_info["old_status"] = existing.get("status", "Unknown")
+                changed_trials.append(trial_info)
+
+            # Handle empty date strings - convert to None for database
+            processed_last_updated = last_updated if last_updated and last_updated.strip() else None
+
+            supabase.table("trials").upsert({
+                "nct_id": nct_id,
+                "brief_title": brief_title,
+                "status": status,
+                "last_updated": processed_last_updated,
+                "last_checked": last_checked
+            }).execute()
+            
+        except Exception as e:
+            print(f"⚠️ Database error for trial {nct_id}: {e}")
+            continue
+
+    return new_trials, changed_trials
     """Upsert trials and detect changes - return detailed trial info"""
     new_trials = []
     changed_trials = []
