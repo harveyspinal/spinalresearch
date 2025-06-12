@@ -1,7 +1,7 @@
 import requests
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from supabase import create_client, Client
 
 # 🔐 Environment variables
@@ -89,7 +89,42 @@ def fetch_trials():
     print(f"✅ Total trials fetched: {len(all_trials)}")
     return all_trials
 
-def upsert_and_detect_changes(trials):
+def get_recent_activity():
+    """Get trials added or changed in the last 30 days"""
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    thirty_days_ago_iso = thirty_days_ago.isoformat()
+    
+    try:
+        # Get trials added in the last 30 days
+        recent_new = (
+            supabase.table("trials")
+            .select("nct_id, brief_title, status, last_updated, last_checked")
+            .gte("last_checked", thirty_days_ago_iso)
+            .order("last_checked", desc=True)
+            .limit(50)  # Limit to prevent email from being too long
+            .execute()
+        ).data or []
+        
+        # Get all trials to check for status changes in last 30 days
+        # Note: This is a simplified approach. For production, you'd want a separate 
+        # "status_history" table to track changes over time
+        recent_trials = []
+        for trial in recent_new:
+            trial_info = {
+                "nct_id": trial["nct_id"],
+                "brief_title": trial["brief_title"],
+                "status": trial["status"],
+                "last_updated": trial["last_updated"] or "Not specified",
+                "last_checked": trial["last_checked"],
+                "url": f"https://clinicaltrials.gov/study/{trial['nct_id']}"
+            }
+            recent_trials.append(trial_info)
+        
+        return recent_trials
+        
+    except Exception as e:
+        print(f"⚠️ Error fetching recent activity: {e}")
+        return []
     """Upsert trials and detect changes - return detailed trial info"""
     new_trials = []
     changed_trials = []
@@ -149,7 +184,7 @@ def upsert_and_detect_changes(trials):
 
     return new_trials, changed_trials
 
-def send_email(new_trials, changed_trials):
+def send_email(new_trials, changed_trials, recent_activity=None):
     """Send detailed email notification with trial information"""
     subject = "🧪 Clinical Trials Update: Spinal Cord Injury"
     html_parts = []
@@ -164,19 +199,19 @@ def send_email(new_trials, changed_trials):
     
     if new_trials:
         html_parts.append(f"""
-        <h3 style="color: #059669; margin-top: 30px;">🆕 New Trials ({len(new_trials)})</h3>
+        <h3 style="color: #059669; margin-top: 30px;">🆕 New Trials Today ({len(new_trials)})</h3>
         """)
         
         for trial in new_trials:
             html_parts.append(f"""
-            <div style="border: 1px solid #d1d5db; border-radius: 8px; padding: 15px; margin: 10px 0; background-color: #f9fafb;">
+            <div style="border: 1px solid #d1d5db; border-radius: 8px; padding: 15px; margin: 10px 0; background-color: #f0fdf4;">
                 <h4 style="color: #1f2937; margin: 0 0 10px 0;">
                     <a href="{trial['url']}" style="color: #2563eb; text-decoration: none;">
                         {trial['nct_id']}: {trial['brief_title']}
                     </a>
                 </h4>
                 <p style="margin: 5px 0; color: #4b5563;">
-                    <strong>Status:</strong> <span style="background-color: #dbeafe; padding: 2px 6px; border-radius: 4px; font-size: 12px;">{trial['status']}</span>
+                    <strong>Status:</strong> <span style="background-color: #dcfce7; padding: 2px 6px; border-radius: 4px; font-size: 12px; color: #166534;">{trial['status']}</span>
                 </p>
                 <p style="margin: 5px 0; color: #4b5563;">
                     <strong>Last Updated:</strong> {trial['last_updated']}
@@ -191,7 +226,7 @@ def send_email(new_trials, changed_trials):
     
     if changed_trials:
         html_parts.append(f"""
-        <h3 style="color: #dc2626; margin-top: 30px;">🔄 Status Changes ({len(changed_trials)})</h3>
+        <h3 style="color: #dc2626; margin-top: 30px;">🔄 Status Changes Today ({len(changed_trials)})</h3>
         """)
         
         for trial in changed_trials:
@@ -204,9 +239,9 @@ def send_email(new_trials, changed_trials):
                 </h4>
                 <p style="margin: 5px 0; color: #4b5563;">
                     <strong>Status Change:</strong> 
-                    <span style="background-color: #fecaca; padding: 2px 6px; border-radius: 4px; font-size: 12px; text-decoration: line-through;">{trial['old_status']}</span>
+                    <span style="background-color: #fecaca; padding: 2px 6px; border-radius: 4px; font-size: 12px; text-decoration: line-through; color: #dc2626;">{trial['old_status']}</span>
                     →
-                    <span style="background-color: #bbf7d0; padding: 2px 6px; border-radius: 4px; font-size: 12px;">{trial['status']}</span>
+                    <span style="background-color: #bbf7d0; padding: 2px 6px; border-radius: 4px; font-size: 12px; color: #166534;">{trial['status']}</span>
                 </p>
                 <p style="margin: 5px 0; color: #4b5563;">
                     <strong>Last Updated:</strong> {trial['last_updated']}
@@ -219,6 +254,46 @@ def send_email(new_trials, changed_trials):
             </div>
             """)
     
+    # Recent Activity Section (Last 30 Days)
+    if recent_activity:
+        html_parts.append(f"""
+        <h3 style="color: #7c3aed; margin-top: 40px; border-top: 2px solid #e5e7eb; padding-top: 20px;">
+            📊 Recent Activity (Last 30 Days) - {len(recent_activity)} trials
+        </h3>
+        <p style="color: #6b7280; margin-bottom: 20px; font-style: italic;">
+            Showing trials that were added to our database in the last 30 days (limited to 50 most recent).
+        </p>
+        """)
+        
+        for trial in recent_activity:
+            # Calculate days ago
+            try:
+                checked_date = datetime.fromisoformat(trial['last_checked'].replace('Z', '+00:00'))
+                days_ago = (datetime.utcnow().replace(tzinfo=checked_date.tzinfo) - checked_date).days
+                if days_ago == 0:
+                    days_text = "Today"
+                elif days_ago == 1:
+                    days_text = "Yesterday"
+                else:
+                    days_text = f"{days_ago} days ago"
+            except:
+                days_text = "Recently"
+            
+            html_parts.append(f"""
+            <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; margin: 8px 0; background-color: #fafafa;">
+                <h5 style="color: #1f2937; margin: 0 0 8px 0; font-size: 14px;">
+                    <a href="{trial['url']}" style="color: #2563eb; text-decoration: none;">
+                        {trial['nct_id']}: {trial['brief_title'][:80]}{'...' if len(trial['brief_title']) > 80 else ''}
+                    </a>
+                </h5>
+                <p style="margin: 3px 0; color: #6b7280; font-size: 12px;">
+                    <strong>Status:</strong> <span style="background-color: #f3f4f6; padding: 1px 4px; border-radius: 3px;">{trial['status']}</span>
+                    | <strong>Added:</strong> {days_text}
+                    | <strong>Last Updated:</strong> {trial['last_updated']}
+                </p>
+            </div>
+            """)
+    
     if not new_trials and not changed_trials:
         html_parts.append("""
         <div style="text-align: center; padding: 30px; color: #6b7280;">
@@ -227,11 +302,12 @@ def send_email(new_trials, changed_trials):
         </div>
         """)
     
-    # Footer
+    # Footer with enhanced stats
+    total_today = len(new_trials) + len(changed_trials)
     html_parts.append(f"""
         <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 12px;">
+            <p><strong>Summary:</strong> {total_today} changes today • {len(recent_activity) if recent_activity else 0} trials added in last 30 days</p>
             <p>This automated report was generated on {datetime.utcnow().strftime('%B %d, %Y at %H:%M UTC')}.</p>
-            <p>Monitoring {len(new_trials) + len(changed_trials)} trials related to spinal cord injury research.</p>
         </div>
     </div>
     """)
@@ -269,10 +345,16 @@ def main():
             return
             
         new_trials, changed_trials = upsert_and_detect_changes(trials)
+        
+        # Get recent activity for the last 30 days
+        recent_activity = get_recent_activity()
+        
         print("📨 Sending email...")
-        print("New trials:", len(new_trials))
-        print("Changed trials:", len(changed_trials))
-        send_email(new_trials, changed_trials)
+        print(f"New trials today: {len(new_trials)}")
+        print(f"Changed trials today: {len(changed_trials)}")
+        print(f"Recent activity (30 days): {len(recent_activity)}")
+        
+        send_email(new_trials, changed_trials, recent_activity)
         print("✅ Process completed successfully")
     except Exception as e:
         print(f"❌ Main process failed: {e}")
