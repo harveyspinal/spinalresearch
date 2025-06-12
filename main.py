@@ -245,84 +245,142 @@ def upsert_and_detect_changes(trials):
     return new_trials, changed_trials
 
 def send_email(new_trials, changed_trials, recent_activity=None):
-    """Send detailed email notification with trial information"""
-    subject = "🧪 Clinical Trials Update: Spinal Cord Injury"
+    """Send detailed email notification with Spinal Research branding"""
+    subject = "🧪 Clinical Trials Update: Spinal Cord Injury Research"
     html_parts = []
     
-    # Header styling
+    # Header with Spinal Research branding
     html_parts.append("""
-    <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
-        <h2 style="color: #2563eb; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px;">
-            🧪 Clinical Trials Update: Spinal Cord Injury
-        </h2>
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; background-color: #ffffff;">
+        <!-- Header Banner -->
+        <div style="background: linear-gradient(135deg, #1e40af 0%, #059669 100%); padding: 25px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 600; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                🧬 Clinical Trials Research Update
+            </h1>
+            <p style="color: #e0f2fe; margin: 8px 0 0 0; font-size: 16px; font-weight: 300;">
+                Spinal Cord Injury Research • Daily Monitoring Report
+            </p>
+        </div>
+        
+        <!-- Content Container -->
+        <div style="padding: 30px; background-color: #fafbfc; border: 1px solid #e1e8ed; border-top: none; border-radius: 0 0 8px 8px;">
+    """)
+    
+    # Daily Report Section (First)
+    html_parts.append("""
+        <div style="margin-bottom: 40px;">
+            <h2 style="color: #1e40af; font-size: 22px; margin: 0 0 20px 0; padding-bottom: 10px; border-bottom: 3px solid #059669;">
+                📊 Today's Activity Report
+            </h2>
     """)
     
     if new_trials:
         html_parts.append(f"""
-        <h3 style="color: #059669; margin-top: 30px;">🆕 New Trials Today ({len(new_trials)})</h3>
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: #059669; font-size: 18px; margin: 0 0 15px 0; display: flex; align-items: center;">
+                    <span style="background-color: #dcfce7; color: #166534; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: 600; margin-right: 10px;">
+                        {len(new_trials)}
+                    </span>
+                    🆕 New Trials Discovered
+                </h3>
         """)
         
         for trial in new_trials:
             html_parts.append(f"""
-            <div style="border: 1px solid #d1d5db; border-radius: 8px; padding: 15px; margin: 10px 0; background-color: #f0fdf4;">
-                <h4 style="color: #1f2937; margin: 0 0 10px 0;">
-                    <a href="{trial['url']}" style="color: #2563eb; text-decoration: none;">
-                        {trial['nct_id']}: {trial['brief_title']}
-                    </a>
-                </h4>
-                <p style="margin: 5px 0; color: #4b5563;">
-                    <strong>Status:</strong> <span style="background-color: #dcfce7; padding: 2px 6px; border-radius: 4px; font-size: 12px; color: #166534;">{trial['status']}</span>
-                </p>
-                <p style="margin: 5px 0; color: #4b5563;">
-                    <strong>Last Updated:</strong> {trial['last_updated']}
-                </p>
-                <p style="margin: 5px 0;">
-                    <a href="{trial['url']}" style="color: #2563eb; text-decoration: none; font-size: 14px;">
-                        → View on ClinicalTrials.gov
-                    </a>
-                </p>
-            </div>
+                <div style="background: white; border: 1px solid #e1e8ed; border-left: 4px solid #059669; border-radius: 6px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                    <h4 style="margin: 0 0 12px 0; font-size: 16px; line-height: 1.4;">
+                        <a href="{trial['url']}" style="color: #1e40af; text-decoration: none; font-weight: 600;" target="_blank">
+                            {trial['nct_id']}: {trial['brief_title']}
+                        </a>
+                    </h4>
+                    <div style="display: flex; flex-wrap: wrap; gap: 15px; align-items: center; color: #64748b; font-size: 14px;">
+                        <div>
+                            <strong style="color: #374151;">Status:</strong>
+                            <span style="background: linear-gradient(135deg, #dcfce7, #bbf7d0); color: #166534; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-left: 5px;">
+                                {trial['status']}
+                            </span>
+                        </div>
+                        <div>
+                            <strong style="color: #374151;">Last Updated:</strong> {trial['last_updated']}
+                        </div>
+                    </div>
+                    <div style="margin-top: 12px;">
+                        <a href="{trial['url']}" style="color: #1e40af; text-decoration: none; font-size: 13px; font-weight: 500;" target="_blank">
+                            → View full details on ClinicalTrials.gov
+                        </a>
+                    </div>
+                </div>
             """)
+        
+        html_parts.append("</div>")
     
     if changed_trials:
         html_parts.append(f"""
-        <h3 style="color: #dc2626; margin-top: 30px;">🔄 Status Changes Today ({len(changed_trials)})</h3>
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: #dc2626; font-size: 18px; margin: 0 0 15px 0; display: flex; align-items: center;">
+                    <span style="background-color: #fee2e2; color: #dc2626; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: 600; margin-right: 10px;">
+                        {len(changed_trials)}
+                    </span>
+                    🔄 Status Changes Detected
+                </h3>
         """)
         
         for trial in changed_trials:
             html_parts.append(f"""
-            <div style="border: 1px solid #d1d5db; border-radius: 8px; padding: 15px; margin: 10px 0; background-color: #fffbeb;">
-                <h4 style="color: #1f2937; margin: 0 0 10px 0;">
-                    <a href="{trial['url']}" style="color: #2563eb; text-decoration: none;">
-                        {trial['nct_id']}: {trial['brief_title']}
-                    </a>
-                </h4>
-                <p style="margin: 5px 0; color: #4b5563;">
-                    <strong>Status Change:</strong> 
-                    <span style="background-color: #fecaca; padding: 2px 6px; border-radius: 4px; font-size: 12px; text-decoration: line-through; color: #dc2626;">{trial['old_status']}</span>
-                    →
-                    <span style="background-color: #bbf7d0; padding: 2px 6px; border-radius: 4px; font-size: 12px; color: #166534;">{trial['status']}</span>
-                </p>
-                <p style="margin: 5px 0; color: #4b5563;">
-                    <strong>Last Updated:</strong> {trial['last_updated']}
-                </p>
-                <p style="margin: 5px 0;">
-                    <a href="{trial['url']}" style="color: #2563eb; text-decoration: none; font-size: 14px;">
-                        → View on ClinicalTrials.gov
-                    </a>
-                </p>
-            </div>
+                <div style="background: white; border: 1px solid #e1e8ed; border-left: 4px solid #dc2626; border-radius: 6px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                    <h4 style="margin: 0 0 12px 0; font-size: 16px; line-height: 1.4;">
+                        <a href="{trial['url']}" style="color: #1e40af; text-decoration: none; font-weight: 600;" target="_blank">
+                            {trial['nct_id']}: {trial['brief_title']}
+                        </a>
+                    </h4>
+                    <div style="margin-bottom: 10px;">
+                        <strong style="color: #374151;">Status Change:</strong>
+                        <div style="margin-top: 8px; display: flex; align-items: center; gap: 10px;">
+                            <span style="background: #fecaca; color: #dc2626; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; text-decoration: line-through;">
+                                {trial['old_status']}
+                            </span>
+                            <span style="color: #6b7280; font-weight: bold;">→</span>
+                            <span style="background: linear-gradient(135deg, #dcfce7, #bbf7d0); color: #166534; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;">
+                                {trial['status']}
+                            </span>
+                        </div>
+                    </div>
+                    <div style="color: #64748b; font-size: 14px; margin-bottom: 12px;">
+                        <strong style="color: #374151;">Last Updated:</strong> {trial['last_updated']}
+                    </div>
+                    <div>
+                        <a href="{trial['url']}" style="color: #1e40af; text-decoration: none; font-size: 13px; font-weight: 500;" target="_blank">
+                            → View full details on ClinicalTrials.gov
+                        </a>
+                    </div>
+                </div>
             """)
+        
+        html_parts.append("</div>")
     
-    # Recent Activity Section (Last 30 Days)
+    if not new_trials and not changed_trials:
+        html_parts.append("""
+            <div style="text-align: center; padding: 40px; background: white; border-radius: 8px; border: 1px solid #e1e8ed;">
+                <div style="font-size: 48px; margin-bottom: 15px;">✅</div>
+                <h3 style="color: #059669; margin: 0 0 10px 0; font-size: 20px;">No Changes Today</h3>
+                <p style="color: #64748b; margin: 0; font-size: 16px;">All spinal cord injury trials remain unchanged since yesterday's check.</p>
+            </div>
+        """)
+    
+    html_parts.append("</div>")  # End daily report section
+    
+    # Recent Activity Section (Second)
     if recent_activity:
         html_parts.append(f"""
-        <h3 style="color: #7c3aed; margin-top: 40px; border-top: 2px solid #e5e7eb; padding-top: 20px;">
-            📊 Recent Activity (Last 30 Days) - {len(recent_activity)} trials
-        </h3>
-        <p style="color: #6b7280; margin-bottom: 20px; font-style: italic;">
-            Showing trials that were added to our database in the last 30 days (limited to 50 most recent).
-        </p>
+            <div style="border-top: 2px solid #e1e8ed; padding-top: 30px;">
+                <h2 style="color: #1e40af; font-size: 22px; margin: 0 0 20px 0; padding-bottom: 10px; border-bottom: 3px solid #059669;">
+                    📈 Recent Activity (Last 30 Days)
+                </h2>
+                <p style="color: #64748b; margin: 0 0 25px 0; font-style: italic; background: #f8fafc; padding: 15px; border-radius: 6px; border-left: 4px solid #1e40af;">
+                    Showing {len(recent_activity)} trials that were added to our monitoring system in the last 30 days (limited to 50 most recent).
+                </p>
+                
+                <div style="display: grid; gap: 12px;">
         """)
         
         for trial in recent_activity:
@@ -332,44 +390,71 @@ def send_email(new_trials, changed_trials, recent_activity=None):
                 days_ago = (datetime.utcnow().replace(tzinfo=checked_date.tzinfo) - checked_date).days
                 if days_ago == 0:
                     days_text = "Today"
+                    days_color = "#059669"
                 elif days_ago == 1:
                     days_text = "Yesterday"
+                    days_color = "#0891b2"
                 else:
                     days_text = f"{days_ago} days ago"
+                    days_color = "#64748b"
             except:
                 days_text = "Recently"
+                days_color = "#64748b"
             
             html_parts.append(f"""
-            <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px; margin: 8px 0; background-color: #fafafa;">
-                <h5 style="color: #1f2937; margin: 0 0 8px 0; font-size: 14px;">
-                    <a href="{trial['url']}" style="color: #2563eb; text-decoration: none;">
-                        {trial['nct_id']}: {trial['brief_title'][:80]}{'...' if len(trial['brief_title']) > 80 else ''}
-                    </a>
-                </h5>
-                <p style="margin: 3px 0; color: #6b7280; font-size: 12px;">
-                    <strong>Status:</strong> <span style="background-color: #f3f4f6; padding: 1px 4px; border-radius: 3px;">{trial['status']}</span>
-                    | <strong>Added:</strong> {days_text}
-                    | <strong>Last Updated:</strong> {trial['last_updated']}
-                </p>
-            </div>
+                <div style="background: white; border: 1px solid #e1e8ed; border-radius: 6px; padding: 16px; transition: all 0.2s;">
+                    <div style="display: flex; justify-content: between; align-items: flex-start; margin-bottom: 8px;">
+                        <h5 style="margin: 0; font-size: 14px; font-weight: 600; flex: 1; line-height: 1.3;">
+                            <a href="{trial['url']}" style="color: #1e40af; text-decoration: none;" target="_blank">
+                                {trial['nct_id']}: {trial['brief_title'][:85]}{'...' if len(trial['brief_title']) > 85 else ''}
+                            </a>
+                        </h5>
+                        <span style="background: {days_color}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; margin-left: 10px;">
+                            {days_text}
+                        </span>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 15px; color: #64748b; font-size: 12px;">
+                        <div>
+                            <strong>Status:</strong>
+                            <span style="background: #f1f5f9; color: #475569; padding: 1px 6px; border-radius: 4px; margin-left: 3px;">
+                                {trial['status']}
+                            </span>
+                        </div>
+                        <div>
+                            <strong>Last Updated:</strong> {trial['last_updated']}
+                        </div>
+                    </div>
+                </div>
             """)
+        
+        html_parts.append("</div></div>")  # End recent activity section
     
-    if not new_trials and not changed_trials:
-        html_parts.append("""
-        <div style="text-align: center; padding: 30px; color: #6b7280;">
-            <h3 style="color: #059669;">✅ No new or changed trials today</h3>
-            <p>All spinal cord injury trials remain unchanged since the last check.</p>
-        </div>
-        """)
-    
-    # Footer with enhanced stats
+    # Footer with Spinal Research branding
     total_today = len(new_trials) + len(changed_trials)
     html_parts.append(f"""
-        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 12px;">
-            <p><strong>Summary:</strong> {total_today} changes today • {len(recent_activity) if recent_activity else 0} trials added in last 30 days</p>
-            <p>This automated report was generated on {datetime.utcnow().strftime('%B %d, %Y at %H:%M UTC')}.</p>
-        </div>
-    </div>
+            <!-- Footer -->
+            <div style="margin-top: 40px; padding: 25px; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-radius: 8px; border: 1px solid #e1e8ed;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="color: #1e40af; font-size: 18px; font-weight: 600; margin-bottom: 5px;">
+                        📊 Report Summary
+                    </div>
+                    <div style="color: #374151; font-size: 14px;">
+                        <strong>{total_today}</strong> changes today • <strong>{len(recent_activity) if recent_activity else 0}</strong> trials added in last 30 days
+                    </div>
+                </div>
+                
+                <div style="text-align: center; padding-top: 20px; border-top: 1px solid #cbd5e1; color: #64748b; font-size: 12px;">
+                    <p style="margin: 0 0 8px 0;">
+                        <strong>Automated Clinical Trials Monitoring</strong><br>
+                        Generated on {datetime.utcnow().strftime('%B %d, %Y at %H:%M UTC')}
+                    </p>
+                    <p style="margin: 0; color: #94a3b8;">
+                        Supporting spinal cord injury research • Together we can cure paralysis
+                    </p>
+                </div>
+            </div>
+        </div>  <!-- End content container -->
+    </div>  <!-- End main container -->
     """)
     
     html_content = "".join(html_parts)
