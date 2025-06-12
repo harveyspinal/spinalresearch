@@ -196,7 +196,7 @@ def upsert_and_detect_changes(trials):
                 result = (
                     supabase.table("trials")
                     .select("status, source")
-                    .eq("trial_id", trial_id)
+                    .eq("nct_id", trial_id)  # Use existing column name
                     .maybe_single()
                     .execute()
                 )
@@ -225,10 +225,11 @@ def upsert_and_detect_changes(trials):
             processed_last_updated = last_updated if last_updated and last_updated.strip() else None
 
             # Try upsert with better error handling and retry logic
+            # Note: Using existing column names from your database schema
             upsert_data = {
-                "trial_id": trial_id,
-                "title": title[:500] if title else "",  # Truncate title if too long
-                "status": status[:100] if status else "",  # Truncate status if too long
+                "nct_id": trial_id,  # Use existing column name
+                "brief_title": title[:500] if title else "",  # Use existing column name
+                "status": status[:100] if status else "",
                 "last_updated": processed_last_updated,
                 "source": source,
                 "url": url,
@@ -261,7 +262,7 @@ def get_recent_activity():
     try:
         recent_new = (
             supabase.table("trials")
-            .select("trial_id, title, status, last_updated, last_checked, source, url")
+            .select("nct_id, brief_title, status, last_updated, last_checked, source, url")  # Use existing column names
             .gte("last_checked", thirty_days_ago_iso)
             .order("last_checked", desc=True)
             .limit(50)
@@ -271,8 +272,8 @@ def get_recent_activity():
         recent_trials = []
         for trial in recent_new:
             trial_info = {
-                "trial_id": trial["trial_id"],
-                "title": trial["title"],
+                "trial_id": trial["nct_id"],  # Map to standard format for email
+                "title": trial["brief_title"],  # Map to standard format for email
                 "status": trial["status"],
                 "last_updated": trial["last_updated"] or "Not specified",
                 "last_checked": trial["last_checked"],
