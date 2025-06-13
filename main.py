@@ -496,6 +496,15 @@ def get_recent_activity():
 
 def send_email(new_trials, changed_trials, recent_activity=None):
     """Send detailed email notification with trials from both registries"""
+    
+    def smart_truncate(text, max_length=120):
+        """Truncate text at word boundary to avoid cutting mid-word"""
+        if len(text) <= max_length:
+            return text
+        # Find last space before max_length
+        truncated = text[:max_length].rsplit(' ', 1)[0]
+        return truncated + '...'
+    
     subject = "🧬 Clinical Trials Update: Spinal Cord Injury Research"
     html_parts = []
     
@@ -681,6 +690,21 @@ def send_email(new_trials, changed_trials, recent_activity=None):
             source_color = "#1e40af" if trial['source'] == 'clinicaltrials.gov' else "#059669"
             source_name = "CT.gov" if trial['source'] == 'clinicaltrials.gov' else "ISRCTN"
             
+            # Determine change type styling and emoji
+            change_type = trial.get('change_type', 'UPDATED')
+            if change_type == 'NEW':
+                change_emoji = "🆕"
+                change_color = "#059669"  # Green for new
+                change_text = "NEW"
+            elif change_type == 'STATUS_CHANGE':
+                change_emoji = "🔄"
+                change_color = "#dc2626"  # Red for status change
+                change_text = "STATUS"
+            else:  # UPDATED or any other type
+                change_emoji = "📝"
+                change_color = "#0891b2"  # Blue for general updates
+                change_text = "UPDATED"
+            
             # Calculate days ago based on actual research activity
             try:
                 if trial['last_updated'] and trial['last_updated'] != "Not specified":
@@ -711,10 +735,13 @@ def send_email(new_trials, changed_trials, recent_activity=None):
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
                         <h5 style="margin: 0; font-size: 14px; font-weight: 600; flex: 1; line-height: 1.3;">
                             <a href="{trial['url']}" style="color: #1e40af; text-decoration: none;" target="_blank">
-                                {trial['trial_id']}: {trial['title'][:75]}{'...' if len(trial['title']) > 75 else ''}
+                                {trial['trial_id']}: {smart_truncate(trial['title'])}
                             </a>
                         </h5>
                         <div style="display: flex; gap: 5px; margin-left: 10px;">
+                            <span style="background: {change_color}; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 600;">
+                                {change_emoji} {change_text}
+                            </span>
                             <span style="background: {source_color}; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 600;">
                                 {source_name}
                             </span>
