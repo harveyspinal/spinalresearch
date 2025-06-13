@@ -749,13 +749,15 @@ def send_email(new_trials, changed_trials, recent_activity=None):
             
             html_parts.append(f"""
                 <div style="background: white; border: 1px solid #dee2e6; border-radius: 6px; padding: 16px;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                        <h5 style="margin: 0; font-size: 14px; font-weight: 600; flex: 1; line-height: 1.3;">
+                    <!-- Mobile-friendly layout: title gets full width, tags stack below -->
+                    <div style="margin-bottom: 12px;">
+                        <h5 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; line-height: 1.3; width: 100%;">
                             <a href="{trial['url']}" style="color: #2c5aa0; text-decoration: none;" target="_blank">
                                 {trial['trial_id']}: {smart_truncate(trial['title'])}
                             </a>
                         </h5>
-                        <div style="display: flex; gap: 5px; margin-left: 10px; flex-wrap: wrap; justify-content: flex-end;">
+                        <!-- Tags section - stacks nicely on mobile -->
+                        <div style="display: flex; gap: 5px; flex-wrap: wrap; align-items: center;">
                             <span style="background: {change_color}; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 600;">
                                 {change_emoji} {change_text}
                             </span>
