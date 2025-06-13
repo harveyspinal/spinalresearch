@@ -286,37 +286,46 @@ def upsert_and_detect_changes(trials):
     return new_trials, changed_trials
 
 def get_recent_activity():
-    """Get trials added or changed in the last 30 days"""
+    """Get trials with recent research activity (last 30 days) based on when they were actually updated"""
     thirty_days_ago = datetime.utcnow() - timedelta(days=30)
     thirty_days_ago_iso = thirty_days_ago.isoformat()
     
     try:
-        recent_new = (
+        # Get trials that have been updated in the last 30 days
+        # Filter out trials with no last_updated date or empty dates
+        recent_trials = (
             supabase.table("trials")
-            .select("nct_id, brief_title, status, last_updated, last_checked, source, url")  # Use existing column names
-            .gte("last_checked", thirty_days_ago_iso)
-            .order("last_checked", desc=True)
+            .select("nct_id, brief_title, status, last_updated, last_checked, source, url")
+            .gte("last_updated", thirty_days_ago_iso)  # Use actual research activity dates
+            .is_("last_updated", "not.null")  # Exclude trials with no update date
+            .order("last_updated", desc=True)  # Order by most recent research activity
             .limit(50)
             .execute()
         ).data or []
         
-        recent_trials = []
-        for trial in recent_new:
+        # Process and format the trials
+        formatted_trials = []
+        for trial in recent_trials:
+            # Skip trials with empty or invalid last_updated dates
+            last_updated_date = trial.get("last_updated")
+            if not last_updated_date or last_updated_date.strip() == "" or last_updated_date == "Not specified":
+                continue
+                
             trial_info = {
-                "trial_id": trial["nct_id"],  # Map to standard format for email
-                "title": trial["brief_title"],  # Map to standard format for email
+                "trial_id": trial["nct_id"],
+                "title": trial["brief_title"],
                 "status": trial["status"],
-                "last_updated": trial["last_updated"] or "Not specified",
-                "last_checked": trial["last_checked"],
+                "last_updated": last_updated_date,
+                "last_checked": trial["last_checked"],  # Keep for reference but not used for filtering
                 "source": trial["source"],
                 "url": trial["url"]
             }
-            recent_trials.append(trial_info)
+            formatted_trials.append(trial_info)
         
-        return recent_trials
+        return formatted_trials
         
     except Exception as e:
-        print(f"⚠️ Error fetching recent activity: {e}")
+        print(f"⚠️ Error fetching recent research activity: {e}")
         return []
 
 def send_email(new_trials, changed_trials, recent_activity=None):
@@ -489,12 +498,13 @@ def send_email(new_trials, changed_trials, recent_activity=None):
         html_parts.append(f"""
             <div style="border-top: 2px solid #e1e8ed; padding-top: 30px;">
                 <h2 style="color: #1e40af; font-size: 22px; margin: 0 0 20px 0; padding-bottom: 10px; border-bottom: 3px solid #059669;">
-                    📈 Recent Activity (Last 30 Days)
+                    📈 Recent Research Activity (Last 30 Days)
                 </h2>
                 <div style="background: #f8fafc; padding: 15px; border-radius: 6px; border-left: 4px solid #1e40af; margin-bottom: 25px;">
                     <p style="color: #64748b; margin: 0; font-style: italic;">
-                        Showing {len(recent_activity)} trials added to our monitoring system in the last 30 days 
+                        Showing {len(recent_activity)} trials with recent research updates in the last 30 days 
                         ({len(ct_recent)} from ClinicalTrials.gov, {len(isrctn_recent)} from ISRCTN).
+                        <br><strong>These represent active research developments, not just monitoring activity.</strong>
                     </p>
                 </div>
                 
@@ -505,21 +515,29 @@ def send_email(new_trials, changed_trials, recent_activity=None):
             source_color = "#1e40af" if trial['source'] == 'clinicaltrials.gov' else "#059669"
             source_name = "CT.gov" if trial['source'] == 'clinicaltrials.gov' else "ISRCTN"
             
-            # Calculate days ago
+            # Calculate days ago based on actual research activity
             try:
-                checked_date = datetime.fromisoformat(trial['last_checked'].replace('Z', '+00:00'))
-                days_ago = (datetime.utcnow().replace(tzinfo=checked_date.tzinfo) - checked_date).days
-                if days_ago == 0:
-                    days_text = "Today"
-                    days_color = "#059669"
-                elif days_ago == 1:
-                    days_text = "Yesterday"
-                    days_color = "#0891b2"
+                if trial['last_updated'] and trial['last_updated'] != "Not specified":
+                    # Parse the last_updated date from the research data
+                    updated_date = datetime.fromisoformat(trial['last_updated'].replace('Z', '+00:00'))
+                    days_ago = (datetime.utcnow().replace(tzinfo=updated_date.tzinfo) - updated_date).days
+                    if days_ago == 0:
+                        days_text = "Updated today"
+                        days_color = "#dc2626"  # Red for very recent
+                    elif days_ago == 1:
+                        days_text = "Updated yesterday"
+                        days_color = "#ea580c"  # Orange for recent
+                    elif days_ago <= 7:
+                        days_text = f"Updated {days_ago}d ago"
+                        days_color = "#059669"  # Green for this week
+                    else:
+                        days_text = f"Updated {days_ago}d ago"
+                        days_color = "#0891b2"  # Blue for this month
                 else:
-                    days_text = f"{days_ago}d ago"
+                    days_text = "Recently updated"
                     days_color = "#64748b"
             except:
-                days_text = "Recently"
+                days_text = "Recently updated"
                 days_color = "#64748b"
             
             html_parts.append(f"""
