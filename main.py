@@ -517,9 +517,25 @@ def send_email(new_trials, changed_trials, recent_activity=None):
         <div style="background-color: #380dbd; padding: 30px 25px; text-align: center; border-radius: 8px 8px 0 0;">
             <!-- Spinal Research Logo -->
             <div style="margin-bottom: 20px;">
-                <img src="https://spinal-research.org/wp-content/uploads/2023/03/Spinal-Research-Logo-White.svg" 
+                <!-- GitHub-hosted logo with fallback -->
+                <img src="https://raw.githubusercontent.com/harveyspinal/spinalresearch/main/assets/spinal-research-logo-white.png" 
                      alt="Spinal Research" 
-                     style="height: 60px; width: auto;" />
+                     style="height: 60px; width: auto; display: block; margin: 0 auto;"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+                <!-- Fallback branded text if image fails -->
+                <div style="display: none; color: white; font-size: 20px; font-weight: bold; text-align: center; line-height: 1.2;">
+                    <div style="margin-bottom: 5px;">
+                        <span style="color: #84c735;">●</span> 
+                        <span style="color: white; letter-spacing: 1px;">spinal</span>
+                    </div>
+                    <div style="margin-bottom: 5px;">
+                        <span style="color: #380dbd;">●</span> 
+                        <span style="color: white; letter-spacing: 1px;">research</span>
+                    </div>
+                    <div style="font-size: 12px; color: #84c735; font-weight: normal;">
+                        Curing paralysis together
+                    </div>
+                </div>
             </div>
             <h1 style="color: white; margin: 0 0 10px 0; font-size: 26px; font-weight: 600;">
                 🧬 Clinical Trials Research Update
