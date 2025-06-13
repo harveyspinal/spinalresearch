@@ -373,7 +373,9 @@ def upsert_and_detect_changes(trials):
             elif existing.get("status") != status:
                 trial_info["old_status"] = existing.get("status", "Unknown")
                 changed_trials.append(trial_info)
-                change_type = "STATUS_CHANGE"
+                # Store detailed status change info
+                old_status = existing.get("status", "Unknown")
+                change_type = f"STATUS_CHANGE: {old_status} → {status}"
 
             # Handle empty date strings - convert to None for database
             # Handle both string and dict formats for last_updated
@@ -690,20 +692,26 @@ def send_email(new_trials, changed_trials, recent_activity=None):
             source_color = "#1e40af" if trial['source'] == 'clinicaltrials.gov' else "#059669"
             source_name = "CT.gov" if trial['source'] == 'clinicaltrials.gov' else "ISRCTN"
             
-            # Determine change type styling and emoji
-            change_type = trial.get('change_type', 'UPDATED')
-            if change_type == 'NEW':
+            # Parse detailed change type information
+            change_type_raw = trial.get('change_type', 'UPDATED')
+            
+            if change_type_raw == 'NEW':
                 change_emoji = "🆕"
                 change_color = "#059669"  # Green for new
-                change_text = "NEW"
-            elif change_type == 'STATUS_CHANGE':
+                change_text = "NEW TRIAL"
+                change_detail = ""
+            elif change_type_raw.startswith('STATUS_CHANGE:'):
                 change_emoji = "🔄"
                 change_color = "#dc2626"  # Red for status change
+                # Extract the status change details
+                status_change = change_type_raw.replace('STATUS_CHANGE: ', '')
                 change_text = "STATUS"
+                change_detail = status_change  # e.g., "Recruiting → Completed"
             else:  # UPDATED or any other type
                 change_emoji = "📝"
                 change_color = "#0891b2"  # Blue for general updates
                 change_text = "UPDATED"
+                change_detail = ""
             
             # Calculate days ago based on actual research activity
             try:
@@ -738,7 +746,7 @@ def send_email(new_trials, changed_trials, recent_activity=None):
                                 {trial['trial_id']}: {smart_truncate(trial['title'])}
                             </a>
                         </h5>
-                        <div style="display: flex; gap: 5px; margin-left: 10px;">
+                        <div style="display: flex; gap: 5px; margin-left: 10px; flex-wrap: wrap; justify-content: flex-end;">
                             <span style="background: {change_color}; color: white; padding: 2px 6px; border-radius: 8px; font-size: 10px; font-weight: 600;">
                                 {change_emoji} {change_text}
                             </span>
@@ -750,6 +758,7 @@ def send_email(new_trials, changed_trials, recent_activity=None):
                             </span>
                         </div>
                     </div>
+                    {"<div style='margin-bottom: 8px; font-size: 12px; color: #dc2626; font-weight: 600;'>" + change_detail + "</div>" if change_detail else ""}
                     <div style="color: #64748b; font-size: 12px;">
                         <strong>Status:</strong>
                         <span style="background: #f1f5f9; color: #475569; padding: 1px 6px; border-radius: 4px; margin-left: 3px;">
