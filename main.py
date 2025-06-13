@@ -297,13 +297,13 @@ def get_recent_activity():
             supabase.table("trials")
             .select("nct_id, brief_title, status, last_updated, last_checked, source, url")
             .gte("last_updated", thirty_days_ago_iso)  # Use actual research activity dates
-            .is_("last_updated", "not.null")  # Exclude trials with no update date
+            .not_.is_("last_updated", "null")  # Exclude trials with null update date
             .order("last_updated", desc=True)  # Order by most recent research activity
             .limit(50)
             .execute()
         ).data or []
         
-        # Process and format the trials
+        # Process and format the trials, with additional filtering for empty strings
         formatted_trials = []
         for trial in recent_trials:
             # Skip trials with empty or invalid last_updated dates
@@ -326,7 +326,43 @@ def get_recent_activity():
         
     except Exception as e:
         print(f"⚠️ Error fetching recent research activity: {e}")
-        return []
+        # Fallback: try without the null filter
+        try:
+            print("🔄 Trying fallback query without null filter...")
+            recent_trials = (
+                supabase.table("trials")
+                .select("nct_id, brief_title, status, last_updated, last_checked, source, url")
+                .gte("last_updated", thirty_days_ago_iso)
+                .order("last_updated", desc=True)
+                .limit(50)
+                .execute()
+            ).data or []
+            
+            # Filter out invalid dates in Python instead
+            formatted_trials = []
+            for trial in recent_trials:
+                last_updated_date = trial.get("last_updated")
+                if (last_updated_date and 
+                    last_updated_date.strip() != "" and 
+                    last_updated_date != "Not specified" and
+                    last_updated_date is not None):
+                    
+                    trial_info = {
+                        "trial_id": trial["nct_id"],
+                        "title": trial["brief_title"],
+                        "status": trial["status"],
+                        "last_updated": last_updated_date,
+                        "last_checked": trial["last_checked"],
+                        "source": trial["source"],
+                        "url": trial["url"]
+                    }
+                    formatted_trials.append(trial_info)
+            
+            return formatted_trials
+            
+        except Exception as fallback_error:
+            print(f"⚠️ Fallback query also failed: {fallback_error}")
+            return []
 
 def send_email(new_trials, changed_trials, recent_activity=None):
     """Send detailed email notification with trials from both registries"""
