@@ -59,33 +59,56 @@ def fetch_clinicaltrials_gov():
                     
                     # Try multiple possible field names and locations for the update date
                     if "lastUpdatePostDate" in status_module:
-                        last_update_date = status_module["lastUpdatePostDate"]
+                        date_field = status_module["lastUpdatePostDate"]
+                        # Handle both string and dict formats
+                        if isinstance(date_field, dict):
+                            last_update_date = date_field.get("date", "")
+                        else:
+                            last_update_date = date_field or ""
                     elif "lastUpdateSubmitDate" in status_module:
-                        last_update_date = status_module["lastUpdateSubmitDate"]
+                        date_field = status_module["lastUpdateSubmitDate"]
+                        if isinstance(date_field, dict):
+                            last_update_date = date_field.get("date", "")
+                        else:
+                            last_update_date = date_field or ""
                     elif "studyFirstPostDate" in status_module:
-                        last_update_date = status_module["studyFirstPostDate"]
+                        date_field = status_module["studyFirstPostDate"]
+                        if isinstance(date_field, dict):
+                            last_update_date = date_field.get("date", "")
+                        else:
+                            last_update_date = date_field or ""
                     elif "resultsFirstPostDate" in status_module:
-                        last_update_date = status_module["resultsFirstPostDate"]
+                        date_field = status_module["resultsFirstPostDate"]
+                        if isinstance(date_field, dict):
+                            last_update_date = date_field.get("date", "")
+                        else:
+                            last_update_date = date_field or ""
                     
                     # If still no date, check other sections
                     if not last_update_date:
                         # Check if there are any date fields in the status module
                         for key, value in status_module.items():
                             if "date" in key.lower() and "post" in key.lower() and value:
-                                last_update_date = value
-                                break
+                                if isinstance(value, dict):
+                                    last_update_date = value.get("date", "")
+                                else:
+                                    last_update_date = value
+                                if last_update_date:
+                                    break
                     
                     # Debug: Print first few records to see what we're getting
                     if len(all_trials) < 3:
                         print(f"🔍 Debug - Trial {identification_module.get('nctId', 'UNKNOWN')}:")
                         print(f"   Available status_module keys: {list(status_module.keys())}")
-                        print(f"   Extracted last_update_date: {last_update_date}")
+                        if "lastUpdatePostDate" in status_module:
+                            print(f"   lastUpdatePostDate structure: {status_module['lastUpdatePostDate']}")
+                        print(f"   Extracted last_update_date: '{last_update_date}'")
                     
                     trial_data = {
                         "trial_id": identification_module.get("nctId", ""),
                         "title": identification_module.get("briefTitle", ""),
                         "status": status_module.get("overallStatus", ""),
-                        "last_updated": last_update_date,
+                        "last_updated": str(last_update_date) if last_update_date else "",  # Ensure it's a string
                         "source": "clinicaltrials.gov",
                         "url": f"https://clinicaltrials.gov/study/{identification_module.get('nctId', '')}"
                     }
@@ -280,7 +303,11 @@ def upsert_and_detect_changes(trials):
                 changed_trials.append(trial_info)
 
             # Handle empty date strings - convert to None for database
-            processed_last_updated = last_updated if last_updated and last_updated.strip() else None
+            # Handle both string and dict formats for last_updated
+            if isinstance(last_updated, dict):
+                processed_last_updated = last_updated.get("date") if last_updated.get("date") and last_updated.get("date").strip() else None
+            else:
+                processed_last_updated = last_updated if last_updated and str(last_updated).strip() else None
 
             # Simplified upsert - just try once and move on if it fails
             try:
