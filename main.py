@@ -365,11 +365,15 @@ def upsert_and_detect_changes(trials):
                 "url": url
             }
 
+            # Determine change type for tracking
+            change_type = "UPDATED"  # Default
             if not existing:
                 new_trials.append(trial_info)
+                change_type = "NEW"
             elif existing.get("status") != status:
                 trial_info["old_status"] = existing.get("status", "Unknown")
                 changed_trials.append(trial_info)
+                change_type = "STATUS_CHANGE"
 
             # Handle empty date strings - convert to None for database
             # Handle both string and dict formats for last_updated
@@ -387,7 +391,8 @@ def upsert_and_detect_changes(trials):
                     "last_updated": processed_last_updated,
                     "source": source,
                     "url": url,
-                    "last_checked": last_checked
+                    "last_checked": last_checked,
+                    "change_type": change_type  # Track what kind of change this was
                 }
                 
                 supabase.table("trials").upsert(upsert_data).execute()
@@ -418,7 +423,7 @@ def get_recent_activity():
         # Filter out trials with no last_updated date or empty dates
         recent_trials = (
             supabase.table("trials")
-            .select("nct_id, brief_title, status, last_updated, last_checked, source, url")
+            .select("nct_id, brief_title, status, last_updated, last_checked, source, url, change_type")
             .gte("last_updated", thirty_days_ago_iso)  # Use actual research activity dates
             .not_.is_("last_updated", "null")  # Exclude trials with null update date
             .order("last_updated", desc=True)  # Order by most recent research activity
@@ -441,7 +446,8 @@ def get_recent_activity():
                 "last_updated": last_updated_date,
                 "last_checked": trial["last_checked"],  # Keep for reference but not used for filtering
                 "source": trial["source"],
-                "url": trial["url"]
+                "url": trial["url"],
+                "change_type": trial.get("change_type", "UPDATED")  # Default to UPDATED if missing
             }
             formatted_trials.append(trial_info)
         
@@ -454,7 +460,7 @@ def get_recent_activity():
             print("🔄 Trying fallback query without null filter...")
             recent_trials = (
                 supabase.table("trials")
-                .select("nct_id, brief_title, status, last_updated, last_checked, source, url")
+                .select("nct_id, brief_title, status, last_updated, last_checked, source, url, change_type")
                 .gte("last_updated", thirty_days_ago_iso)
                 .order("last_updated", desc=True)
                 .limit(50)
@@ -477,7 +483,8 @@ def get_recent_activity():
                         "last_updated": last_updated_date,
                         "last_checked": trial["last_checked"],
                         "source": trial["source"],
-                        "url": trial["url"]
+                        "url": trial["url"],
+                        "change_type": trial.get("change_type", "UPDATED")  # Default to UPDATED if missing
                     }
                     formatted_trials.append(trial_info)
             
