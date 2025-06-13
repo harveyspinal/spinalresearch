@@ -215,36 +215,67 @@ def fetch_isrctn():
                             if not title:  # Only use as fallback
                                 title = text
                 
-                # Find status - look for recruitment/trial status fields
-                valid_statuses = ['recruiting', 'not yet recruiting', 'completed', 'terminated', 'suspended', 
-                                'ongoing', 'active', 'enrolling', 'closed', 'stopped', 'withdrawn']
-                
+                # Find status - prioritize specific ISRCTN status fields
+                # First, try to find specific status fields from ISRCTN API schema
                 for field in isrctn_fields:
                     if field.text and field.text.strip():
                         text = field.text.strip()
                         field_name = field.tag.lower().split('}')[-1]  # Remove namespace
                         
-                        # Check if field name suggests it's a status field
-                        if any(keyword in field_name for keyword in ['status', 'state', 'recruitment']):
-                            # Check if the text looks like a valid status
-                            if any(valid_status in text.lower() for valid_status in valid_statuses):
-                                status = text
-                                break
-                        # Check if text content looks like a status
-                        elif (len(text) < 50 and  # Status should be short
-                              any(valid_status in text.lower() for valid_status in valid_statuses)):
-                            status = text
+                        # Priority 1: Look for exact ISRCTN status field names
+                        if field_name == 'trialstatus':
+                            status = text  # "Ongoing" or "Completed"
+                            break
+                        elif field_name == 'recruitmentstatus':
+                            status = text  # "Not yet recruiting", "Recruiting", "No longer recruited"
+                            break
+                        elif field_name == 'overallstatus':
+                            status = text  # Alternative status field
                             break
                 
-                # Find dates - look for date fields
+                # Priority 2: If no specific status field found, look for status-like fields
+                if not status:
+                    valid_statuses = ['recruiting', 'not yet recruiting', 'completed', 'terminated', 'suspended', 
+                                    'ongoing', 'active', 'enrolling', 'closed', 'stopped', 'withdrawn']
+                    
+                    for field in isrctn_fields:
+                        if field.text and field.text.strip():
+                            text = field.text.strip()
+                            field_name = field.tag.lower().split('}')[-1]  # Remove namespace
+                            
+                            # Check if field name suggests it's a status field
+                            if any(keyword in field_name for keyword in ['status', 'state', 'recruitment']):
+                                # Check if the text looks like a valid status
+                                if any(valid_status in text.lower() for valid_status in valid_statuses):
+                                    status = text
+                                    break
+                            # Check if text content looks like a status (short text only)
+                            elif (len(text) < 50 and  # Status should be short
+                                  any(valid_status in text.lower() for valid_status in valid_statuses)):
+                                status = text
+                                break
+                
+                # Find dates - look for specific ISRCTN date fields first
                 for field in isrctn_fields:
                     if field.text and field.text.strip():
                         text = field.text.strip()
                         field_name = field.tag.lower().split('}')[-1]  # Remove namespace
                         
-                        if any(keyword in field_name for keyword in ['date', 'updated', 'edited', 'modified', 'last']):
+                        # Priority 1: Look for specific ISRCTN date field names
+                        if field_name in ['lastedited', 'lastupdate', 'dateupdated', 'lastupdated']:
                             # Check if text looks like a date
-                            if re.match(r'\d{4}-\d{2}-\d{2}', text) or re.match(r'\d{2}/\d{2}/\d{4}', text):
+                            if (re.match(r'\d{4}-\d{2}-\d{2}', text) or 
+                                re.match(r'\d{2}/\d{2}/\d{4}', text) or
+                                'T' in text):  # ISO datetime format
+                                last_updated = text
+                                break
+                        
+                        # Priority 2: Generic date fields
+                        elif any(keyword in field_name for keyword in ['date', 'updated', 'edited', 'modified', 'last']):
+                            # Check if text looks like a date
+                            if (re.match(r'\d{4}-\d{2}-\d{2}', text) or 
+                                re.match(r'\d{2}/\d{2}/\d{4}', text) or
+                                'T' in text):  # ISO datetime format
                                 last_updated = text
                                 break
                 
@@ -257,7 +288,11 @@ def fetch_isrctn():
                         print(f"   Title: '{title[:80]}...'")
                         print(f"   Status: '{status[:100]}...' ")
                         print(f"   Last Updated: '{last_updated}'")
-                    
+                        
+                        # Debug: Show available field names for first trial
+                        field_names = [field.tag.lower().split('}')[-1] for field in isrctn_fields if field.text and field.text.strip()]
+                        unique_fields = sorted(list(set(field_names)))
+                        print(f"   Available XML fields: {unique_fields[:20]}...")  # Show first 20 field names
                     trial_data = {
                         "trial_id": trial_id,
                         "title": title,
