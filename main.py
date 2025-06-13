@@ -510,11 +510,11 @@ def send_email(new_trials, changed_trials, recent_activity=None):
     subject = "🧬 Clinical Trials Update: Spinal Cord Injury Research"
     html_parts = []
     
-    # Header with Spinal Research branding - clean, solid colors
+    # Header with Spinal Research branding - official brand colors
     html_parts.append("""
     <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 0 auto; background-color: #ffffff;">
         <!-- Header Banner -->
-        <div style="background-color: #2c5aa0; padding: 30px 25px; text-align: center; border-radius: 8px 8px 0 0;">
+        <div style="background-color: #380dbd; padding: 30px 25px; text-align: center; border-radius: 8px 8px 0 0;">
             <!-- Spinal Research Logo -->
             <div style="margin-bottom: 20px;">
                 <img src="https://spinal-research.org/wp-content/uploads/2023/03/Spinal-Research-Logo-White.svg" 
@@ -533,7 +533,7 @@ def send_email(new_trials, changed_trials, recent_activity=None):
         </div>
         
         <!-- Content Container -->
-        <div style="padding: 30px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 8px 8px;">
+        <div style="padding: 30px; background-color: #f8f8f8; border: 1px solid #dee2e6; border-top: none; border-radius: 0 0 8px 8px;">
     """)
     
     # Count trials by source for today's activity
@@ -542,23 +542,23 @@ def send_email(new_trials, changed_trials, recent_activity=None):
     ct_changed = [t for t in changed_trials if t['source'] == 'clinicaltrials.gov']
     isrctn_changed = [t for t in changed_trials if t['source'] == 'isrctn']
     
-    # Daily Report Section with updated colors
+    # Daily Report Section with official brand colors
     html_parts.append("""
         <div style="margin-bottom: 40px;">
-            <h2 style="color: #2c5aa0; font-size: 22px; margin: 0 0 20px 0; padding-bottom: 10px; border-bottom: 3px solid #28a745;">
+            <h2 style="color: #380dbd; font-size: 22px; margin: 0 0 20px 0; padding-bottom: 10px; border-bottom: 3px solid #84c735;">
                 📊 Today's Activity Report
             </h2>
     """)
     
-    # Registry Summary with updated colors
+    # Registry Summary with official brand colors
     html_parts.append(f"""
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;">
             <div style="background: white; border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; text-align: center;">
-                <h4 style="margin: 0 0 5px 0; color: #2c5aa0;">ClinicalTrials.gov</h4>
+                <h4 style="margin: 0 0 5px 0; color: #380dbd;">ClinicalTrials.gov</h4>
                 <p style="margin: 0; color: #6c757d; font-size: 14px;">{len(ct_new)} new • {len(ct_changed)} changed</p>
             </div>
             <div style="background: white; border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; text-align: center;">
-                <h4 style="margin: 0 0 5px 0; color: #28a745;">ISRCTN Registry</h4>
+                <h4 style="margin: 0 0 5px 0; color: #84c735;">ISRCTN Registry</h4>
                 <p style="margin: 0; color: #6c757d; font-size: 14px;">{len(isrctn_new)} new • {len(isrctn_changed)} changed</p>
             </div>
         </div>
@@ -567,7 +567,7 @@ def send_email(new_trials, changed_trials, recent_activity=None):
     if new_trials:
         html_parts.append(f"""
             <div style="margin-bottom: 30px;">
-                <h3 style="color: #28a745; font-size: 18px; margin: 0 0 15px 0; display: flex; align-items: center;">
+                <h3 style="color: #84c735; font-size: 18px; margin: 0 0 15px 0; display: flex; align-items: center;">
                     <span style="background-color: #d4edda; color: #155724; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: 600; margin-right: 10px;">
                         {len(new_trials)}
                     </span>
@@ -576,14 +576,14 @@ def send_email(new_trials, changed_trials, recent_activity=None):
         """)
         
         for trial in new_trials:
-            source_color = "#2c5aa0" if trial['source'] == 'clinicaltrials.gov' else "#28a745"
+            source_color = "#380dbd" if trial['source'] == 'clinicaltrials.gov' else "#84c735"
             source_name = "ClinicalTrials.gov" if trial['source'] == 'clinicaltrials.gov' else "ISRCTN"
             
             html_parts.append(f"""
                 <div style="background: white; border: 1px solid #dee2e6; border-left: 4px solid {source_color}; border-radius: 6px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
                         <h4 style="margin: 0; font-size: 16px; line-height: 1.4; flex: 1;">
-                            <a href="{trial['url']}" style="color: #2c5aa0; text-decoration: none; font-weight: 600;" target="_blank">
+                            <a href="{trial['url']}" style="color: #380dbd; text-decoration: none; font-weight: 600;" target="_blank">
                                 {trial['trial_id']}: {trial['title']}
                             </a>
                         </h4>
@@ -603,7 +603,7 @@ def send_email(new_trials, changed_trials, recent_activity=None):
                         </div>
                     </div>
                     <div style="margin-top: 12px;">
-                        <a href="{trial['url']}" style="color: #2c5aa0; text-decoration: none; font-size: 13px; font-weight: 500;" target="_blank">
+                        <a href="{trial['url']}" style="color: #380dbd; text-decoration: none; font-size: 13px; font-weight: 500;" target="_blank">
                             → View full details on {source_name}
                         </a>
                     </div>
@@ -624,14 +624,14 @@ def send_email(new_trials, changed_trials, recent_activity=None):
         """)
         
         for trial in changed_trials:
-            source_color = "#2c5aa0" if trial['source'] == 'clinicaltrials.gov' else "#28a745"
+            source_color = "#380dbd" if trial['source'] == 'clinicaltrials.gov' else "#84c735"
             source_name = "ClinicalTrials.gov" if trial['source'] == 'clinicaltrials.gov' else "ISRCTN"
             
             html_parts.append(f"""
                 <div style="background: white; border: 1px solid #dee2e6; border-left: 4px solid #fd7e14; border-radius: 6px; padding: 20px; margin: 15px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
                         <h4 style="margin: 0; font-size: 16px; line-height: 1.4; flex: 1;">
-                            <a href="{trial['url']}" style="color: #2c5aa0; text-decoration: none; font-weight: 600;" target="_blank">
+                            <a href="{trial['url']}" style="color: #380dbd; text-decoration: none; font-weight: 600;" target="_blank">
                                 {trial['trial_id']}: {trial['title']}
                             </a>
                         </h4>
@@ -655,7 +655,7 @@ def send_email(new_trials, changed_trials, recent_activity=None):
                         <strong style="color: #495057;">Last Updated:</strong> {trial['last_updated']}
                     </div>
                     <div>
-                        <a href="{trial['url']}" style="color: #2c5aa0; text-decoration: none; font-size: 13px; font-weight: 500;" target="_blank">
+                        <a href="{trial['url']}" style="color: #380dbd; text-decoration: none; font-size: 13px; font-weight: 500;" target="_blank">
                             → View full details on {source_name}
                         </a>
                     </div>
@@ -668,7 +668,7 @@ def send_email(new_trials, changed_trials, recent_activity=None):
         html_parts.append("""
             <div style="text-align: center; padding: 40px; background: white; border-radius: 8px; border: 1px solid #dee2e6;">
                 <div style="font-size: 48px; margin-bottom: 15px;">✅</div>
-                <h3 style="color: #28a745; margin: 0 0 10px 0; font-size: 20px;">No Changes Today</h3>
+                <h3 style="color: #84c735; margin: 0 0 10px 0; font-size: 20px;">No Changes Today</h3>
                 <p style="color: #6c757d; margin: 0; font-size: 16px;">All spinal cord injury trials remain unchanged across both registries.</p>
             </div>
         """)
@@ -683,10 +683,10 @@ def send_email(new_trials, changed_trials, recent_activity=None):
         
         html_parts.append(f"""
             <div style="border-top: 2px solid #dee2e6; padding-top: 30px;">
-                <h2 style="color: #2c5aa0; font-size: 22px; margin: 0 0 20px 0; padding-bottom: 10px; border-bottom: 3px solid #28a745;">
+                <h2 style="color: #380dbd; font-size: 22px; margin: 0 0 20px 0; padding-bottom: 10px; border-bottom: 3px solid #84c735;">
                     📈 Recent Research Activity (Last 30 Days)
                 </h2>
-                <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; border-left: 4px solid #2c5aa0; margin-bottom: 25px;">
+                <div style="background: #f8f8f8; padding: 15px; border-radius: 6px; border-left: 4px solid #380dbd; margin-bottom: 25px;">
                     <p style="color: #6c757d; margin: 0; font-style: italic;">
                         Showing {len(recent_activity)} trials with recent research updates in the last 30 days 
                         ({len(ct_recent)} from ClinicalTrials.gov, {len(isrctn_recent)} from ISRCTN).
@@ -698,7 +698,7 @@ def send_email(new_trials, changed_trials, recent_activity=None):
         """)
         
         for trial in recent_activity:
-            source_color = "#2c5aa0" if trial['source'] == 'clinicaltrials.gov' else "#28a745"
+            source_color = "#380dbd" if trial['source'] == 'clinicaltrials.gov' else "#84c735"
             source_name = "CT.gov" if trial['source'] == 'clinicaltrials.gov' else "ISRCTN"
             
             # Parse detailed change type information
@@ -706,7 +706,7 @@ def send_email(new_trials, changed_trials, recent_activity=None):
             
             if change_type_raw == 'NEW':
                 change_emoji = "🆕"
-                change_color = "#28a745"  # Green for new
+                change_color = "#84c735"  # Hopeful Green for new
                 change_text = "NEW TRIAL"
                 change_detail = ""
             elif change_type_raw.startswith('STATUS_CHANGE:'):
@@ -752,7 +752,7 @@ def send_email(new_trials, changed_trials, recent_activity=None):
                     <!-- Mobile-friendly layout: title gets full width, tags stack below -->
                     <div style="margin-bottom: 12px;">
                         <h5 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; line-height: 1.3; width: 100%;">
-                            <a href="{trial['url']}" style="color: #2c5aa0; text-decoration: none;" target="_blank">
+                            <a href="{trial['url']}" style="color: #380dbd; text-decoration: none;" target="_blank">
                                 {trial['trial_id']}: {smart_truncate(trial['title'])}
                             </a>
                         </h5>
@@ -772,7 +772,7 @@ def send_email(new_trials, changed_trials, recent_activity=None):
                     {"<div style='margin-bottom: 8px; font-size: 12px; color: #fd7e14; font-weight: 600;'>" + change_detail + "</div>" if change_detail else ""}
                     <div style="color: #6c757d; font-size: 12px;">
                         <strong>Status:</strong>
-                        <span style="background: #f8f9fa; color: #495057; padding: 1px 6px; border-radius: 4px; margin-left: 3px;">
+                        <span style="background: #f8f8f8; color: #495057; padding: 1px 6px; border-radius: 4px; margin-left: 3px;">
                             {trial['status']}
                         </span>
                         <span style="margin-left: 15px;"><strong>Updated:</strong> {trial['last_updated']}</span>
@@ -789,9 +789,9 @@ def send_email(new_trials, changed_trials, recent_activity=None):
     
     html_parts.append(f"""
             <!-- Footer -->
-            <div style="margin-top: 40px; padding: 25px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">
+            <div style="margin-top: 40px; padding: 25px; background: #f8f8f8; border-radius: 8px; border: 1px solid #dee2e6;">
                 <div style="text-align: center; margin-bottom: 20px;">
-                    <div style="color: #2c5aa0; font-size: 18px; font-weight: 600; margin-bottom: 5px;">
+                    <div style="color: #380dbd; font-size: 18px; font-weight: 600; margin-bottom: 5px;">
                         📊 Comprehensive Report Summary
                     </div>
                     <div style="color: #495057; font-size: 14px;">
@@ -805,7 +805,7 @@ def send_email(new_trials, changed_trials, recent_activity=None):
                         <strong>Clinical Trials Monitoring by Spinal Research</strong><br>
                         Generated on {datetime.utcnow().strftime('%B %d, %Y at %H:%M UTC')}
                     </p>
-                    <p style="margin: 0; color: #28a745; font-weight: 600;">
+                    <p style="margin: 0; color: #84c735; font-weight: 600;">
                         Together we can cure paralysis
                     </p>
                 </div>
