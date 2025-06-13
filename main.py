@@ -177,14 +177,29 @@ def fetch_isrctn():
                 for elem in trial_elem.iter():
                     if elem.text and elem.text.strip():
                         text_content = elem.text.strip()
-                        # Look for ISRCTN pattern
-                        if 'ISRCTN' in text_content and text_content.startswith('ISRCTN'):
-                            trial_id = text_content
-                        elif elem.tag.lower() in ['isrctn', 'trial_id', 'id'] and 'ISRCTN' in text_content:
-                            trial_id = text_content
-                        elif not trial_id and text_content.isdigit() and len(text_content) == 8:
-                            # Looks like an ISRCTN number without prefix
+                        # Look for ISRCTN pattern - more comprehensive
+                        if 'ISRCTN' in text_content:
+                            # Extract just the ISRCTN part if it's mixed with other text
+                            import re
+                            isrctn_match = re.search(r'ISRCTN\d{8}', text_content)
+                            if isrctn_match:
+                                trial_id = isrctn_match.group()
+                                break
+                        elif text_content.isdigit() and len(text_content) == 8:
+                            # This looks like an 8-digit ISRCTN number without prefix
                             trial_id = f"ISRCTN{text_content}"
+                            break
+                        elif elem.tag.lower() in ['isrctn', 'trial_id', 'id', 'identifier']:
+                            # This element seems to contain an ID
+                            if text_content.isdigit() and len(text_content) == 8:
+                                trial_id = f"ISRCTN{text_content}"
+                                break
+                            elif 'ISRCTN' in text_content:
+                                import re
+                                isrctn_match = re.search(r'ISRCTN\d{8}', text_content)
+                                if isrctn_match:
+                                    trial_id = isrctn_match.group()
+                                    break
                 
                 # Look for title - more comprehensive search
                 for elem in trial_elem.iter():
@@ -218,19 +233,23 @@ def fetch_isrctn():
                         break
                 
                 if trial_id and title:  # Only process if we have essential data
-                    # Ensure ISRCTN ID has proper format for URL
-                    if trial_id.startswith('ISRCTN'):
-                        clean_trial_id = trial_id
-                    else:
-                        clean_trial_id = f"ISRCTN{trial_id}"
+                    # Ensure ISRCTN ID has proper format for URL - final cleanup
+                    if not trial_id.startswith('ISRCTN') and trial_id.isdigit() and len(trial_id) == 8:
+                        trial_id = f"ISRCTN{trial_id}"
+                    
+                    # Debug: Print first few ISRCTN records to see what we're getting
+                    if trials_found < 3:
+                        print(f"🔍 ISRCTN Debug - Trial {trials_found + 1}:")
+                        print(f"   Extracted trial_id: '{trial_id}'")
+                        print(f"   Title: '{title[:50]}...'")
                     
                     trial_data = {
-                        "trial_id": clean_trial_id,
+                        "trial_id": trial_id,
                         "title": title,
                         "status": status or "Unknown",
                         "last_updated": last_updated or "",
                         "source": "isrctn",
-                        "url": f"https://www.isrctn.com/{clean_trial_id}"
+                        "url": f"https://www.isrctn.com/{trial_id}"
                     }
                     
                     all_trials.append(trial_data)
