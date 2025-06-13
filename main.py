@@ -54,11 +54,38 @@ def fetch_clinicaltrials_gov():
                     identification_module = protocol_section.get("identificationModule", {})
                     status_module = protocol_section.get("statusModule", {})
                     
+                    # More thorough extraction of last update date
+                    last_update_date = ""
+                    
+                    # Try multiple possible field names and locations for the update date
+                    if "lastUpdatePostDate" in status_module:
+                        last_update_date = status_module["lastUpdatePostDate"]
+                    elif "lastUpdateSubmitDate" in status_module:
+                        last_update_date = status_module["lastUpdateSubmitDate"]
+                    elif "studyFirstPostDate" in status_module:
+                        last_update_date = status_module["studyFirstPostDate"]
+                    elif "resultsFirstPostDate" in status_module:
+                        last_update_date = status_module["resultsFirstPostDate"]
+                    
+                    # If still no date, check other sections
+                    if not last_update_date:
+                        # Check if there are any date fields in the status module
+                        for key, value in status_module.items():
+                            if "date" in key.lower() and "post" in key.lower() and value:
+                                last_update_date = value
+                                break
+                    
+                    # Debug: Print first few records to see what we're getting
+                    if len(all_trials) < 3:
+                        print(f"🔍 Debug - Trial {identification_module.get('nctId', 'UNKNOWN')}:")
+                        print(f"   Available status_module keys: {list(status_module.keys())}")
+                        print(f"   Extracted last_update_date: {last_update_date}")
+                    
                     trial_data = {
                         "trial_id": identification_module.get("nctId", ""),
                         "title": identification_module.get("briefTitle", ""),
                         "status": status_module.get("overallStatus", ""),
-                        "last_updated": status_module.get("lastUpdatePostDate", ""),
+                        "last_updated": last_update_date,
                         "source": "clinicaltrials.gov",
                         "url": f"https://clinicaltrials.gov/study/{identification_module.get('nctId', '')}"
                     }
