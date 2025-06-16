@@ -145,7 +145,7 @@ def fetch_isrctn():
     
     try:
         params = {
-            "q": 'condition:"spinal cord injury"',
+            "q": 'condition:"spinal cord"',  # Broader search to match database
             "limit": 1000  # Start with large limit, adjust if needed
         }
         
