@@ -255,37 +255,50 @@ def fetch_isrctn():
                                 status = text
                                 break
                 
-                # Find dates - look for specific ISRCTN date fields first
+                # Find dates - ENHANCED: Look in text content for "as of" dates
+                latest_date = None
+                latest_date_text = ""
+                
                 for field in isrctn_fields:
                     if field.text and field.text.strip():
                         text = field.text.strip()
                         field_name = field.tag.lower().split('}')[-1]  # Remove namespace
                         
-                        # Debug: Print ALL field names for first few trials to see what's available
-                        if trials_found < 2:
-                            print(f"   Field '{field_name}': '{text[:50]}'...")
-                        
-                        # Priority 1: Look for specific ISRCTN date field names
-                        if field_name in ['lastedited', 'lastupdate', 'dateupdated', 'lastupdated', 'dateofregistration', 'overalltrialenddate', 'overalltrialstartdate']:
-                            # Check if text looks like a date
-                            if (re.match(r'\d{4}-\d{2}-\d{2}', text) or 
-                                re.match(r'\d{2}/\d{2}/\d{4}', text) or
-                                'T' in text):  # ISO datetime format
-                                last_updated = text
-                                if trials_found < 3:
-                                    print(f"   ✅ Found date in field '{field_name}': '{text}'")
-                                break
-                        
-                        # Priority 2: Generic date fields
-                        elif any(keyword in field_name for keyword in ['date', 'updated', 'edited', 'modified', 'last']):
-                            # Check if text looks like a date
-                            if (re.match(r'\d{4}-\d{2}-\d{2}', text) or 
-                                re.match(r'\d{2}/\d{2}/\d{4}', text) or
-                                'T' in text):  # ISO datetime format
-                                if not last_updated:  # Only use as fallback
+                        # Look for "as of DD/MM/YYYY" or "as of DD/MM/YY" patterns in text content
+                        import re
+                        date_match = re.search(r'as of (\d{1,2}/\d{1,2}/\d{4})', text, re.IGNORECASE)
+                        if date_match:
+                            date_str = date_match.group(1)
+                            try:
+                                # Convert DD/MM/YYYY to YYYY-MM-DD format
+                                from datetime import datetime
+                                date_obj = datetime.strptime(date_str, '%d/%m/%Y')
+                                iso_date = date_obj.strftime('%Y-%m-%d')
+                                
+                                # Keep the most recent date found
+                                if not latest_date or date_obj > latest_date:
+                                    latest_date = date_obj
+                                    latest_date_text = iso_date
+                                    if trials_found < 3:
+                                        print(f"   ✅ Found 'as of' date in {field_name}: '{date_str}' → '{iso_date}'")
+                            except:
+                                continue
+                
+                # Use the latest "as of" date found, or fallback to start date
+                if latest_date_text:
+                    last_updated = latest_date_text
+                else:
+                    # Fallback to existing logic for overallstartdate
+                    for field in isrctn_fields:
+                        if field.text and field.text.strip():
+                            text = field.text.strip()
+                            field_name = field.tag.lower().split('}')[-1]
+                            
+                            if field_name == 'overallstartdate':
+                                if (re.match(r'\d{4}-\d{2}-\d{2}', text) or 'T' in text):
                                     last_updated = text
                                     if trials_found < 3:
-                                        print(f"   📅 Fallback date from field '{field_name}': '{text}'")
+                                        print(f"   📅 Fallback to start date: '{text}'")
                                     break
                 
                 # Only process if we have both a valid trial ID and title
