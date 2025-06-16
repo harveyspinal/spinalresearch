@@ -443,6 +443,8 @@ def upsert_and_detect_changes(trials):
 
     print(f"🔄 Processing {len(trials)} trials for database operations...")
 
+    isrctn_debug_count = 0  # Track ISRCTN trials separately for debugging
+
     for i, trial in enumerate(trials):
         if i % 100 == 0:  # Progress update every 100 trials
             print(f"📊 Processed {i}/{len(trials)} trials...")
@@ -459,6 +461,10 @@ def upsert_and_detect_changes(trials):
         except KeyError as e:
             print(f"⚠️ Skipping trial due to missing data: {e}")
             continue
+
+        # Track ISRCTN trials for debugging
+        if source == "isrctn":
+            isrctn_debug_count += 1
 
         try:
             # Query existing trial with better error handling
@@ -513,23 +519,31 @@ def upsert_and_detect_changes(trials):
                             frac_part = frac_part[:6]
                             processed_last_updated = f"{base_ts}.{frac_part}Z"
                             # Debug for ISRCTN trials
-                            if source == "isrctn" and i < 3:
+                            if source == "isrctn" and isrctn_debug_count <= 5:
                                 print(f"   🔧 Fixed precision for {trial_id}: '{raw_timestamp}' → '{processed_last_updated}'")
                         else:
                             processed_last_updated = raw_timestamp
+                            # Debug for ISRCTN trials - no fix needed
+                            if source == "isrctn" and isrctn_debug_count <= 5:
+                                print(f"   ✅ No precision fix needed for {trial_id}: '{processed_last_updated}' ({len(frac_part)} digits)")
                     else:
                         processed_last_updated = raw_timestamp
+                        if source == "isrctn" and isrctn_debug_count <= 5:
+                            print(f"   ✅ No decimals for {trial_id}: '{processed_last_updated}'")
                 except Exception as precision_error:
                     # If precision fix fails, try without microseconds
                     try:
                         dt = datetime.fromisoformat(str(raw_timestamp).replace('Z', '+00:00'))
                         processed_last_updated = dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-                        if source == "isrctn" and i < 3:
+                        if source == "isrctn" and isrctn_debug_count <= 5:
                             print(f"   🔄 Fallback format for {trial_id}: '{processed_last_updated}'")
                     except:
                         processed_last_updated = None
-                        if source == "isrctn" and i < 3:
+                        if source == "isrctn" and isrctn_debug_count <= 5:
                             print(f"   ❌ Timestamp processing failed for {trial_id}: '{raw_timestamp}'")
+            else:
+                if source == "isrctn" and isrctn_debug_count <= 5:
+                    print(f"   ⚠️ No raw timestamp for {trial_id}")
 
             # Simplified upsert with better error handling
             try:
@@ -547,8 +561,11 @@ def upsert_and_detect_changes(trials):
                 supabase.table("trials").upsert(upsert_data).execute()
                 
                 # Success debug for ISRCTN
-                if source == "isrctn" and i < 3 and processed_last_updated:
-                    print(f"   ✅ Successfully stored {trial_id} with timestamp: '{processed_last_updated}'")
+                if source == "isrctn" and isrctn_debug_count <= 5:
+                    if processed_last_updated:
+                        print(f"   ✅ Successfully stored {trial_id} with timestamp: '{processed_last_updated}'")
+                    else:
+                        print(f"   ⚠️ Stored {trial_id} with NULL timestamp")
                 
             except Exception as upsert_error:
                 # Enhanced error logging for timestamp issues
@@ -567,6 +584,12 @@ def upsert_and_detect_changes(trials):
 
     print(f"✅ Completed processing {len(trials)} trials")
     print(f"📊 Found {len(new_trials)} new trials and {len(changed_trials)} changed trials")
+    
+    # Summary for ISRCTN processing
+    isrctn_trials = [t for t in trials if t['source'] == 'isrctn']
+    if isrctn_trials:
+        print(f"🔍 ISRCTN Summary: Processed {len(isrctn_trials)} trials with timestamp debugging")
+    
     return new_trials, changed_trials
 
 def get_recent_activity():
