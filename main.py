@@ -398,9 +398,55 @@ def fetch_isrctn():
                             all_fields_debug.append(f"{field_name_orig}: '{field_value}'")
                     
                     print(f"      📋 All potential status fields: {all_fields_debug}")
+                
+                # IMPROVED: Set meaningful default status instead of "Unknown"
+                if not status:
+                    # Try to infer status from dates if available
+                    current_year = datetime.now().year
                     
-                    # Fallback to "Unknown" with a note
-                    status = "Unknown - No status fields found"
+                    # Look for recruitment or trial dates to infer status
+                    for field in isrctn_fields:
+                        field_name = field.tag.lower().split('}')[-1]
+                        if field.text and field.text.strip():
+                            text = field.text.strip()
+                            
+                            # Check recruitment dates
+                            if 'recruitmentstart' in field_name:
+                                try:
+                                    # Extract year from date
+                                    if text.startswith(str(current_year)) or text.startswith(str(current_year + 1)):
+                                        status = "Recruiting (inferred from start date)"
+                                        if trials_found < 3:
+                                            print(f"   💡 Inferred status from {field_name}: '{status}'")
+                                        break
+                                    elif any(year in text for year in [str(current_year - 1), str(current_year - 2)]):
+                                        status = "Recently Active (inferred)"
+                                        if trials_found < 3:
+                                            print(f"   💡 Inferred status from {field_name}: '{status}'")
+                                        break
+                                except:
+                                    continue
+                    
+                    # Final fallback
+                    if not status:
+                        status = "Status Not Available"
+                        if trials_found < 3:
+                            print(f"   ⚠️ Using fallback status: '{status}'")
+                else:
+                    # Clean up status if it's too long or inappropriate
+                    if len(status) > 100:
+                        status = status[:97] + "..."
+                    
+                    # Fix obvious non-status values
+                    if any(bad_indicator in status.lower() for bad_indicator in 
+                          ['england', 'scotland', 'wales', 'data-sharing', 'email', '@']):
+                        status = "Status Not Available"
+                        if trials_found < 3:
+                            print(f"   🔧 Cleaned inappropriate status value")
+                
+                # Ensure status is not empty
+                if not status or status.strip() == "":
+                    status = "Status Not Available"
                 
                 # Find dates - ENHANCED: Prioritize official lastUpdated attribute
                 latest_date = None
