@@ -261,13 +261,19 @@ def fetch_isrctn():
                         text = field.text.strip()
                         field_name = field.tag.lower().split('}')[-1]  # Remove namespace
                         
+                        # Debug: Print ALL field names for first few trials to see what's available
+                        if trials_found < 2:
+                            print(f"   Field '{field_name}': '{text[:50]}'...")
+                        
                         # Priority 1: Look for specific ISRCTN date field names
-                        if field_name in ['lastedited', 'lastupdate', 'dateupdated', 'lastupdated']:
+                        if field_name in ['lastedited', 'lastupdate', 'dateupdated', 'lastupdated', 'dateofregistration', 'overalltrialenddate', 'overalltrialstartdate']:
                             # Check if text looks like a date
                             if (re.match(r'\d{4}-\d{2}-\d{2}', text) or 
                                 re.match(r'\d{2}/\d{2}/\d{4}', text) or
                                 'T' in text):  # ISO datetime format
                                 last_updated = text
+                                if trials_found < 3:
+                                    print(f"   ✅ Found date in field '{field_name}': '{text}'")
                                 break
                         
                         # Priority 2: Generic date fields
@@ -276,8 +282,11 @@ def fetch_isrctn():
                             if (re.match(r'\d{4}-\d{2}-\d{2}', text) or 
                                 re.match(r'\d{2}/\d{2}/\d{4}', text) or
                                 'T' in text):  # ISO datetime format
-                                last_updated = text
-                                break
+                                if not last_updated:  # Only use as fallback
+                                    last_updated = text
+                                    if trials_found < 3:
+                                        print(f"   📅 Fallback date from field '{field_name}': '{text}'")
+                                    break
                 
                 # Only process if we have both a valid trial ID and title
                 if trial_id and title and len(title) > 10:
@@ -520,7 +529,7 @@ def send_email(new_trials, changed_trials, recent_activity=None):
                 <!-- GitHub-hosted logo with fallback -->
                 <img src="https://raw.githubusercontent.com/harveyspinal/spinalresearch/main/assets/spinal-research-logo-white.png" 
                      alt="Spinal Research" 
-                     style="height: 35px; width: auto; display: block; margin: 0 auto;"
+                     style="height: 35px !important; max-height: 35px; width: auto; max-width: 200px; display: block; margin: 0 auto;"
                      onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
                 <!-- Fallback branded text if image fails -->
                 <div style="display: none; color: white; font-size: 16px; font-weight: bold; text-align: center; line-height: 1.2;">
