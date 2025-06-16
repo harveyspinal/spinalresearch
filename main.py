@@ -310,7 +310,7 @@ def fetch_isrctn():
                     if status:
                         break
                 
-                # Second, look for any field with status-like values
+                # Second, look for any field with status-like values (but exclude date fields)
                 if not status:
                     valid_statuses = ['recruiting', 'not yet recruiting', 'completed', 'terminated', 
                                     'suspended', 'ongoing', 'active', 'enrolling', 'closed', 'stopped', 
@@ -321,6 +321,12 @@ def fetch_isrctn():
                             text = field.text.strip()
                             field_name = field.tag.lower().split('}')[-1]
                             
+                            # SKIP date-like fields (common issue!)
+                            if (any(date_keyword in field_name for date_keyword in 
+                                   ['date', 'start', 'end', 'time']) or
+                                'T' in text and 'Z' in text):  # Skip ISO timestamps
+                                continue
+                            
                             # Check if field contains status-like value
                             if (len(text) < 100 and  # Status should be relatively short
                                 any(valid_status in text.lower() for valid_status in valid_statuses)):
@@ -329,12 +335,21 @@ def fetch_isrctn():
                                     print(f"   ✅ Found status-like value in {field_name}: '{status}'")
                                 break
                 
-                # Third, look for field names containing status keywords
+                # Third, look for field names containing status keywords (but not date keywords)
                 if not status:
                     for field in isrctn_fields:
                         if field.text and field.text.strip():
                             text = field.text.strip()
                             field_name = field.tag.lower().split('}')[-1]
+                            
+                            # SKIP date-like fields
+                            if any(date_keyword in field_name for date_keyword in 
+                                  ['date', 'start', 'end', 'time', 'created', 'updated']):
+                                continue
+                            
+                            # SKIP timestamp-like content
+                            if 'T' in text and 'Z' in text:
+                                continue
                             
                             # Check if field name suggests it's status-related
                             if (any(keyword in field_name for keyword in ['status', 'recruit', 'state']) and
@@ -349,14 +364,16 @@ def fetch_isrctn():
                     available_fields = [field.tag.lower().split('}')[-1] for field in isrctn_fields 
                                       if field.text and field.text.strip()]
                     status_candidates = [f for f in available_fields 
-                                       if any(keyword in f for keyword in ['status', 'recruit', 'trial', 'phase'])]
+                                       if any(keyword in f for keyword in ['status', 'recruit', 'trial', 'phase'])
+                                       and not any(date_kw in f for date_kw in ['date', 'start', 'end', 'time'])]
                     print(f"   ⚠️ No status found. Available status-related fields: {status_candidates}")
-                    print(f"   📋 Sample fields: {sorted(list(set(available_fields)))[:10]}...")
+                    print(f"   📋 Sample non-date fields: {[f for f in sorted(list(set(available_fields)))[:15] if not any(d in f for d in ['date', 'start', 'end', 'time'])]}")
                     
                     # Use first reasonable field as fallback
                     for field in isrctn_fields:
                         field_name = field.tag.lower().split('}')[-1]
-                        if field_name in status_candidates and field.text and field.text.strip():
+                        if (field_name in status_candidates and field.text and field.text.strip() and
+                            not ('T' in field.text and 'Z' in field.text)):  # Not a timestamp
                             status = field.text.strip()[:100]  # Limit length
                             print(f"   🔄 Fallback status from {field_name}: '{status}'")
                             break
