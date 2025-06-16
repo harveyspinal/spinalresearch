@@ -179,7 +179,14 @@ def fetch_isrctn():
                 status = ""
                 last_updated = ""
                 
-                # Find ISRCTN ID - look for specific field names
+                # PRIORITY 1: Check for lastUpdated XML attribute on <trial> element
+                trial_element = trial_elem.find('.//{http://www.67bricks.com/isrctn}trial')
+                if trial_element is not None and 'lastUpdated' in trial_element.attrib:
+                    last_updated = trial_element.attrib['lastUpdated']
+                    if trials_found < 3:
+                        print(f"   🎯 Found lastUpdated attribute: '{last_updated}'")
+                
+                # Continue with existing field extraction for ID, title, status
                 isrctn_fields = trial_elem.findall('.//*') 
                 for field in isrctn_fields:
                     if field.text and field.text.strip():
