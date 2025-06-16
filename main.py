@@ -437,7 +437,7 @@ def fetch_isrctn():
     return all_trials
 
 def upsert_and_detect_changes(trials):
-    """Upsert trials and detect changes across both sources"""
+    """Upsert trials and detect changes across both sources - FIXED for timestamp precision"""
     new_trials = []
     changed_trials = []
 
@@ -492,20 +492,53 @@ def upsert_and_detect_changes(trials):
                 old_status = existing.get("status", "Unknown")
                 change_type = f"STATUS_CHANGE: {old_status} → {status}"
 
-            # Handle empty date strings - convert to None for database
-            # Handle both string and dict formats for last_updated
+            # FIXED: Handle timestamp precision for PostgreSQL compatibility
+            processed_last_updated = None
             if isinstance(last_updated, dict):
-                processed_last_updated = last_updated.get("date") if last_updated.get("date") and last_updated.get("date").strip() else None
+                raw_timestamp = last_updated.get("date") if last_updated.get("date") and last_updated.get("date").strip() else None
             else:
-                processed_last_updated = last_updated if last_updated and str(last_updated).strip() else None
+                raw_timestamp = last_updated if last_updated and str(last_updated).strip() else None
+            
+            # Fix precision issues for PostgreSQL (max 6 decimal places)
+            if raw_timestamp:
+                try:
+                    ts_str = str(raw_timestamp)
+                    if '.' in ts_str and ts_str.endswith('Z'):
+                        # Split timestamp at decimal point
+                        base_ts, frac_and_tz = ts_str.split('.', 1)
+                        frac_part = frac_and_tz[:-1]  # Remove 'Z'
+                        
+                        # Truncate to max 6 decimal places for PostgreSQL
+                        if len(frac_part) > 6:
+                            frac_part = frac_part[:6]
+                            processed_last_updated = f"{base_ts}.{frac_part}Z"
+                            # Debug for ISRCTN trials
+                            if source == "isrctn" and i < 3:
+                                print(f"   🔧 Fixed precision for {trial_id}: '{raw_timestamp}' → '{processed_last_updated}'")
+                        else:
+                            processed_last_updated = raw_timestamp
+                    else:
+                        processed_last_updated = raw_timestamp
+                except Exception as precision_error:
+                    # If precision fix fails, try without microseconds
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(str(raw_timestamp).replace('Z', '+00:00'))
+                        processed_last_updated = dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+                        if source == "isrctn" and i < 3:
+                            print(f"   🔄 Fallback format for {trial_id}: '{processed_last_updated}'")
+                    except:
+                        processed_last_updated = None
+                        if source == "isrctn" and i < 3:
+                            print(f"   ❌ Timestamp processing failed for {trial_id}: '{raw_timestamp}'")
 
-            # Simplified upsert - just try once and move on if it fails
+            # Simplified upsert with better error handling
             try:
                 upsert_data = {
                     "nct_id": trial_id,
                     "brief_title": title[:500] if title else "",
                     "status": status[:100] if status else "", 
-                    "last_updated": processed_last_updated,
+                    "last_updated": processed_last_updated,  # Use precision-fixed timestamp
                     "source": source,
                     "url": url,
                     "last_checked": last_checked,
@@ -514,9 +547,16 @@ def upsert_and_detect_changes(trials):
                 
                 supabase.table("trials").upsert(upsert_data).execute()
                 
+                # Success debug for ISRCTN
+                if source == "isrctn" and i < 3 and processed_last_updated:
+                    print(f"   ✅ Successfully stored {trial_id} with timestamp: '{processed_last_updated}'")
+                
             except Exception as upsert_error:
-                # Log error but continue processing - don't let one failure stop everything
-                if i < 10:  # Only log first 10 errors to avoid spam
+                # Enhanced error logging for timestamp issues
+                error_msg = str(upsert_error)
+                if source == "isrctn" and ("timestamp" in error_msg.lower() or "date" in error_msg.lower()):
+                    print(f"   🚨 Timestamp error for {trial_id}: {error_msg[:150]}...")
+                elif i < 10:  # Only log first 10 general errors to avoid spam
                     print(f"⚠️ Database upsert failed for trial {trial_id}: {str(upsert_error)[:100]}...")
                 continue
             
