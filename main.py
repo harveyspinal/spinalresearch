@@ -268,53 +268,70 @@ def fetch_isrctn():
                         import re
                         from datetime import datetime
                         
-                        # Pattern 1: "as of DD/MM/YYYY"
+                        # Pattern 1: "as of DD/MM/YYYY" - HIGHEST PRIORITY
                         date_match = re.search(r'as of (\d{1,2}/\d{1,2}/\d{4})', text, re.IGNORECASE)
                         if date_match:
                             date_str = date_match.group(1)
                             try:
                                 date_obj = datetime.strptime(date_str, '%d/%m/%Y')
                                 iso_date = date_obj.strftime('%Y-%m-%d')
-                                if not latest_date or date_obj > latest_date:
-                                    latest_date = date_obj
-                                    latest_date_text = iso_date
-                                    if trials_found < 3:
-                                        print(f"   ✅ Found 'as of' date in {field_name}: '{date_str}' → '{iso_date}'")
+                                # Only use dates that aren't in the future
+                                if date_obj <= datetime.now():
+                                    if not latest_date or date_obj > latest_date:
+                                        latest_date = date_obj
+                                        latest_date_text = iso_date
+                                        if trials_found < 3:
+                                            print(f"   ✅ Found 'as of' date in {field_name}: '{date_str}' → '{iso_date}'")
                                 continue
                             except:
                                 pass
                         
-                        # Pattern 2: "as of DD/MM/YY" (2-digit year)
+                        # Pattern 2: "as of DD/MM/YY" (2-digit year) - HIGH PRIORITY
                         date_match = re.search(r'as of (\d{1,2}/\d{1,2}/\d{2})', text, re.IGNORECASE)
                         if date_match:
                             date_str = date_match.group(1)
                             try:
                                 date_obj = datetime.strptime(date_str, '%d/%m/%y')
                                 iso_date = date_obj.strftime('%Y-%m-%d')
-                                if not latest_date or date_obj > latest_date:
-                                    latest_date = date_obj
-                                    latest_date_text = iso_date
-                                    if trials_found < 3:
-                                        print(f"   ✅ Found 'as of' date (2-digit) in {field_name}: '{date_str}' → '{iso_date}'")
+                                # Only use dates that aren't in the future
+                                if date_obj <= datetime.now():
+                                    if not latest_date or date_obj > latest_date:
+                                        latest_date = date_obj
+                                        latest_date_text = iso_date
+                                        if trials_found < 3:
+                                            print(f"   ✅ Found 'as of' date (2-digit) in {field_name}: '{date_str}' → '{iso_date}'")
                                 continue
                             except:
                                 pass
-                        
-                        # Pattern 3: "YYYY-MM-DD" format
-                        date_match = re.search(r'(\d{4}-\d{1,2}-\d{1,2})', text)
-                        if date_match:
-                            date_str = date_match.group(1)
-                            try:
-                                date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-                                iso_date = date_obj.strftime('%Y-%m-%d')
-                                if not latest_date or date_obj > latest_date:
-                                    latest_date = date_obj
-                                    latest_date_text = iso_date
-                                    if trials_found < 3:
-                                        print(f"   ✅ Found ISO date in {field_name}: '{date_str}'")
+                
+                # If no "as of" dates found, look for other dates but exclude future planning dates
+                if not latest_date_text:
+                    for field in isrctn_fields:
+                        if field.text and field.text.strip():
+                            text = field.text.strip()
+                            field_name = field.tag.lower().split('}')[-1]
+                            
+                            # Skip future planning fields
+                            if field_name in ['overallenddate', 'intenttopublish', 'plannedenddate', 'expectedenddate']:
                                 continue
-                            except:
-                                pass
+                                
+                            # Pattern 3: "YYYY-MM-DD" format in relevant fields
+                            date_match = re.search(r'(\d{4}-\d{1,2}-\d{1,2})', text)
+                            if date_match:
+                                date_str = date_match.group(1)
+                                try:
+                                    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                                    iso_date = date_obj.strftime('%Y-%m-%d')
+                                    # Only use dates that aren't in the future
+                                    if date_obj <= datetime.now():
+                                        if not latest_date or date_obj > latest_date:
+                                            latest_date = date_obj
+                                            latest_date_text = iso_date
+                                            if trials_found < 3:
+                                                print(f"   ✅ Found ISO date in {field_name}: '{date_str}'")
+                                        continue
+                                except:
+                                    pass
                 
                 # Debug: For trials with no dates found, show some sample text
                 if not latest_date_text and trials_found < 5:
