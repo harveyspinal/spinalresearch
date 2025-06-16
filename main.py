@@ -522,7 +522,6 @@ def upsert_and_detect_changes(trials):
                 except Exception as precision_error:
                     # If precision fix fails, try without microseconds
                     try:
-                        from datetime import datetime
                         dt = datetime.fromisoformat(str(raw_timestamp).replace('Z', '+00:00'))
                         processed_last_updated = dt.strftime('%Y-%m-%dT%H:%M:%SZ')
                         if source == "isrctn" and i < 3:
