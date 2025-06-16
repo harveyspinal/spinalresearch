@@ -179,13 +179,6 @@ def fetch_isrctn():
                 status = ""
                 last_updated = ""
                 
-                # PRIORITY 1: Check for lastUpdated XML attribute on <trial> element
-                trial_element = trial_elem.find('.//{http://www.67bricks.com/isrctn}trial')
-                if trial_element is not None and 'lastUpdated' in trial_element.attrib:
-                    last_updated = trial_element.attrib['lastUpdated']
-                    if trials_found < 3:
-                        print(f"   🎯 Found lastUpdated attribute: '{last_updated}'")
-                
                 # Continue with existing field extraction for ID, title, status
                 isrctn_fields = trial_elem.findall('.//*') 
                 for field in isrctn_fields:
@@ -262,72 +255,52 @@ def fetch_isrctn():
                                 status = text
                                 break
                 
-                # Find dates - ENHANCED: Look in text content for "as of" dates
+                # Find dates - ENHANCED: Prioritize official lastUpdated attribute
                 latest_date = None
                 latest_date_text = ""
                 
-                for field in isrctn_fields:
-                    if field.text and field.text.strip():
-                        text = field.text.strip()
-                        field_name = field.tag.lower().split('}')[-1]  # Remove namespace
-                        
-                        # Look for multiple date patterns in text content
-                        import re
+                # PRIORITY 1: Check for lastUpdated XML attribute on <trial> element (OFFICIAL TIMESTAMP)
+                trial_element = trial_elem.find('.//{http://www.67bricks.com/isrctn}trial')
+                if trial_element is not None and 'lastUpdated' in trial_element.attrib:
+                    official_timestamp = trial_element.attrib['lastUpdated']
+                    try:
+                        # Parse and validate the official timestamp
                         from datetime import datetime
+                        date_obj = datetime.fromisoformat(official_timestamp.replace('Z', '+00:00'))
+                        iso_date = date_obj.strftime('%Y-%m-%d')
                         
-                        # Pattern 1: "as of DD/MM/YYYY" - HIGHEST PRIORITY
-                        date_match = re.search(r'as of (\d{1,2}/\d{1,2}/\d{4})', text, re.IGNORECASE)
-                        if date_match:
-                            date_str = date_match.group(1)
-                            try:
-                                date_obj = datetime.strptime(date_str, '%d/%m/%Y')
-                                iso_date = date_obj.strftime('%Y-%m-%d')
-                                # Only use dates that aren't in the future
-                                if date_obj <= datetime.now():
-                                    if not latest_date or date_obj > latest_date:
-                                        latest_date = date_obj
-                                        latest_date_text = iso_date
-                                        if trials_found < 3:
-                                            print(f"   ✅ Found 'as of' date in {field_name}: '{date_str}' → '{iso_date}'")
-                                continue
-                            except:
-                                pass
-                        
-                        # Pattern 2: "as of DD/MM/YY" (2-digit year) - HIGH PRIORITY
-                        date_match = re.search(r'as of (\d{1,2}/\d{1,2}/\d{2})', text, re.IGNORECASE)
-                        if date_match:
-                            date_str = date_match.group(1)
-                            try:
-                                date_obj = datetime.strptime(date_str, '%d/%m/%y')
-                                iso_date = date_obj.strftime('%Y-%m-%d')
-                                # Only use dates that aren't in the future
-                                if date_obj <= datetime.now():
-                                    if not latest_date or date_obj > latest_date:
-                                        latest_date = date_obj
-                                        latest_date_text = iso_date
-                                        if trials_found < 3:
-                                            print(f"   ✅ Found 'as of' date (2-digit) in {field_name}: '{date_str}' → '{iso_date}'")
-                                continue
-                            except:
-                                pass
+                        # Only use dates that aren't in the future
+                        if date_obj <= datetime.now(date_obj.tzinfo):
+                            latest_date_text = official_timestamp  # Keep full precision timestamp
+                            if trials_found < 3:
+                                print(f"   🎯 Using official lastUpdated attribute: '{official_timestamp}'")
+                        else:
+                            if trials_found < 3:
+                                print(f"   ⚠️ Official timestamp is in future, ignoring: '{official_timestamp}'")
+                    except Exception as e:
+                        if trials_found < 3:
+                            print(f"   ⚠️ Failed to parse official timestamp '{official_timestamp}': {e}")
                 
-                # If no "as of" dates found, look for other dates but exclude future planning dates
+                # PRIORITY 2: Only do text parsing if no official timestamp found
                 if not latest_date_text:
+                    if trials_found < 3:
+                        print(f"   🔍 No official timestamp, falling back to text parsing...")
+                    
                     for field in isrctn_fields:
                         if field.text and field.text.strip():
                             text = field.text.strip()
-                            field_name = field.tag.lower().split('}')[-1]
+                            field_name = field.tag.lower().split('}')[-1]  # Remove namespace
                             
-                            # Skip future planning fields
-                            if field_name in ['overallenddate', 'intenttopublish', 'plannedenddate', 'expectedenddate']:
-                                continue
-                                
-                            # Pattern 3: "YYYY-MM-DD" format in relevant fields
-                            date_match = re.search(r'(\d{4}-\d{1,2}-\d{1,2})', text)
+                            # Look for multiple date patterns in text content
+                            import re
+                            from datetime import datetime
+                            
+                            # Pattern 1: "as of DD/MM/YYYY" - HIGHEST PRIORITY for text parsing
+                            date_match = re.search(r'as of (\d{1,2}/\d{1,2}/\d{4})', text, re.IGNORECASE)
                             if date_match:
                                 date_str = date_match.group(1)
                                 try:
-                                    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                                    date_obj = datetime.strptime(date_str, '%d/%m/%Y')
                                     iso_date = date_obj.strftime('%Y-%m-%d')
                                     # Only use dates that aren't in the future
                                     if date_obj <= datetime.now():
@@ -335,38 +308,91 @@ def fetch_isrctn():
                                             latest_date = date_obj
                                             latest_date_text = iso_date
                                             if trials_found < 3:
-                                                print(f"   ✅ Found ISO date in {field_name}: '{date_str}'")
+                                                print(f"   ✅ Found 'as of' date in {field_name}: '{date_str}' → '{iso_date}'")
                                         continue
                                 except:
                                     pass
+                            
+                            # Pattern 2: "as of DD/MM/YY" (2-digit year) - HIGH PRIORITY for text parsing
+                            date_match = re.search(r'as of (\d{1,2}/\d{1,2}/\d{2})', text, re.IGNORECASE)
+                            if date_match:
+                                date_str = date_match.group(1)
+                                try:
+                                    date_obj = datetime.strptime(date_str, '%d/%m/%y')
+                                    iso_date = date_obj.strftime('%Y-%m-%d')
+                                    # Only use dates that aren't in the future
+                                    if date_obj <= datetime.now():
+                                        if not latest_date or date_obj > latest_date:
+                                            latest_date = date_obj
+                                            latest_date_text = iso_date
+                                            if trials_found < 3:
+                                                print(f"   ✅ Found 'as of' date (2-digit) in {field_name}: '{date_str}' → '{iso_date}'")
+                                        continue
+                                except:
+                                    pass
+                    
+                    # If no "as of" dates found in text, look for other dates but exclude future planning dates
+                    if not latest_date_text:
+                        for field in isrctn_fields:
+                            if field.text and field.text.strip():
+                                text = field.text.strip()
+                                field_name = field.tag.lower().split('}')[-1]
+                                
+                                # Skip future planning fields
+                                if field_name in ['overallenddate', 'intenttopublish', 'plannedenddate', 'expectedenddate']:
+                                    continue
+                                    
+                                # Pattern 3: "YYYY-MM-DD" format in relevant fields
+                                date_match = re.search(r'(\d{4}-\d{1,2}-\d{1,2})', text)
+                                if date_match:
+                                    date_str = date_match.group(1)
+                                    try:
+                                        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                                        iso_date = date_obj.strftime('%Y-%m-%d')
+                                        # Only use dates that aren't in the future
+                                        if date_obj <= datetime.now():
+                                            if not latest_date or date_obj > latest_date:
+                                                latest_date = date_obj
+                                                latest_date_text = iso_date
+                                                if trials_found < 3:
+                                                    print(f"   ✅ Found ISO date in {field_name}: '{date_str}'")
+                                            continue
+                                    except:
+                                        pass
+                    
+                    # Final fallback to existing logic for overallstartdate
+                    if not latest_date_text:
+                        for field in isrctn_fields:
+                            if field.text and field.text.strip():
+                                text = field.text.strip()
+                                field_name = field.tag.lower().split('}')[-1]
+                                
+                                if field_name == 'overallstartdate':
+                                    if (re.match(r'\d{4}-\d{2}-\d{2}', text) or 'T' in text):
+                                        latest_date_text = text
+                                        if trials_found < 3:
+                                            print(f"   📅 Final fallback to start date: '{text}'")
+                                        break
                 
-                # Debug: For trials with no dates found, show some sample text
+                # Debug: For trials with no dates found, show diagnostic info
                 if not latest_date_text and trials_found < 5:
                     print(f"   ⚠️ No date patterns found for trial {trials_found + 1}")
-                    # Show sample field content to understand what we're missing
-                    sample_fields = ['primaryoutcome', 'secondaryoutcome', 'studyhypothesis']
-                    for field in isrctn_fields:
-                        field_name = field.tag.lower().split('}')[-1]
-                        if field_name in sample_fields and field.text:
-                            text_sample = field.text.strip()[:150] + "..." if len(field.text.strip()) > 150 else field.text.strip()
-                            print(f"     Sample {field_name}: '{text_sample}'")
+                    # Check if trial element exists but has no lastUpdated attribute
+                    if trial_element is not None:
+                        available_attrs = list(trial_element.attrib.keys())
+                        print(f"     Available trial attributes: {available_attrs}")
+                    else:
+                        print(f"     No trial element found in XML structure")
                 
-                # Use the latest "as of" date found, or fallback to start date
+                # Use the final determined date
                 if latest_date_text:
                     last_updated = latest_date_text
+                    if trials_found < 3:
+                        print(f"   ✅ Final last_updated value: '{last_updated}'")
                 else:
-                    # Fallback to existing logic for overallstartdate
-                    for field in isrctn_fields:
-                        if field.text and field.text.strip():
-                            text = field.text.strip()
-                            field_name = field.tag.lower().split('}')[-1]
-                            
-                            if field_name == 'overallstartdate':
-                                if (re.match(r'\d{4}-\d{2}-\d{2}', text) or 'T' in text):
-                                    last_updated = text
-                                    if trials_found < 3:
-                                        print(f"   📅 Fallback to start date: '{text}'")
-                                    break
+                    last_updated = ""
+                    if trials_found < 3:
+                        print(f"   ❌ No last_updated date found")
                 
                 # Only process if we have both a valid trial ID and title
                 if trial_id and title and len(title) > 10:
