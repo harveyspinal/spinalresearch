@@ -136,6 +136,76 @@ def fetch_clinicaltrials_gov():
     print(f"✅ ClinicalTrials.gov - Total trials fetched: {len(all_trials)}")
     return all_trials
 
+def debug_isrctn_status_fields():
+    """Debug function to understand ISRCTN XML status field structure"""
+    print("🔍 Debugging ISRCTN status fields...")
+    
+    try:
+        params = {
+            "q": 'condition:"spinal cord"',
+            "limit": 3  # Just a few for debugging
+        }
+        
+        response = requests.get("https://www.isrctn.com/api/query/format/default", 
+                              params=params, timeout=30)
+        response.raise_for_status()
+        
+        root = ET.fromstring(response.content)
+        namespace = {'isrctn': 'http://www.67bricks.com/isrctn'}
+        
+        full_trials = root.findall('.//isrctn:fullTrial', namespace) or \
+                     root.findall('.//{http://www.67bricks.com/isrctn}fullTrial')
+        
+        print(f"📊 Analyzing {len(full_trials)} trials for status fields...")
+        
+        for i, trial_elem in enumerate(full_trials):
+            print(f"\n🔍 Trial {i+1} Status Analysis:")
+            
+            # Get trial ID first
+            trial_id = "Unknown"
+            isrctn_fields = trial_elem.findall('.//*')
+            for field in isrctn_fields:
+                if field.text and field.text.strip():
+                    text = field.text.strip()
+                    import re
+                    match = re.search(r'ISRCTN(\d{8})', text)
+                    if match:
+                        trial_id = f"ISRCTN{match.group(1)}"
+                        break
+            
+            print(f"   Trial ID: {trial_id}")
+            
+            # Look for ALL fields containing "status", "recruit", "state", etc.
+            status_related_fields = []
+            all_field_names = set()
+            
+            for field in isrctn_fields:
+                field_name = field.tag.lower().split('}')[-1]  # Remove namespace
+                all_field_names.add(field_name)
+                
+                # Check if field name suggests it's status-related
+                if any(keyword in field_name for keyword in 
+                       ['status', 'recruit', 'state', 'phase', 'trial', 'overall', 'current']):
+                    if field.text and field.text.strip():
+                        status_related_fields.append({
+                            'field_name': field_name,
+                            'value': field.text.strip()[:100]  # First 100 chars
+                        })
+            
+            print(f"   📋 Status-related fields found:")
+            if status_related_fields:
+                for field_info in status_related_fields:
+                    print(f"      {field_info['field_name']}: '{field_info['value']}'")
+            else:
+                print(f"      ❌ No obvious status fields found")
+            
+            # Show sample of all available field names
+            sorted_fields = sorted(list(all_field_names))
+            print(f"   📝 All available fields ({len(sorted_fields)}): {sorted_fields[:15]}...")
+            
+    except Exception as e:
+        print(f"❌ Debug failed: {e}")
+
 def fetch_isrctn():
     """Fetch trials from ISRCTN API"""
     print("📥 Fetching from ISRCTN API...")
@@ -215,45 +285,81 @@ def fetch_isrctn():
                             if not title:  # Only use as fallback
                                 title = text
                 
-                # Find status - prioritize specific ISRCTN status fields
-                # First, try to find specific status fields from ISRCTN API schema
-                for field in isrctn_fields:
-                    if field.text and field.text.strip():
-                        text = field.text.strip()
-                        field_name = field.tag.lower().split('}')[-1]  # Remove namespace
-                        
-                        # Priority 1: Look for exact ISRCTN status field names
-                        if field_name == 'trialstatus':
-                            status = text  # "Ongoing" or "Completed"
-                            break
-                        elif field_name == 'recruitmentstatus':
-                            status = text  # "Not yet recruiting", "Recruiting", "No longer recruited"
-                            break
-                        elif field_name == 'overallstatus':
-                            status = text  # Alternative status field
-                            break
+                # Find status - ENHANCED extraction for ISRCTN status fields
+                status = ""
                 
-                # Priority 2: If no specific status field found, look for status-like fields
+                # Priority order of field names to check for status
+                priority_status_fields = [
+                    'trialstatus',
+                    'recruitmentstatus', 
+                    'overallstatus',
+                    'currentstatus',
+                    'studystatus',
+                    'status'
+                ]
+                
+                # First, try priority fields
+                for priority_field in priority_status_fields:
+                    for field in isrctn_fields:
+                        field_name = field.tag.lower().split('}')[-1]
+                        if field_name == priority_field and field.text and field.text.strip():
+                            status = field.text.strip()
+                            if trials_found < 3:
+                                print(f"   ✅ Found status in {field_name}: '{status}'")
+                            break
+                    if status:
+                        break
+                
+                # Second, look for any field with status-like values
                 if not status:
-                    valid_statuses = ['recruiting', 'not yet recruiting', 'completed', 'terminated', 'suspended', 
-                                    'ongoing', 'active', 'enrolling', 'closed', 'stopped', 'withdrawn']
+                    valid_statuses = ['recruiting', 'not yet recruiting', 'completed', 'terminated', 
+                                    'suspended', 'ongoing', 'active', 'enrolling', 'closed', 'stopped', 
+                                    'withdrawn', 'no longer recruiting', 'enrolling by invitation']
                     
                     for field in isrctn_fields:
                         if field.text and field.text.strip():
                             text = field.text.strip()
-                            field_name = field.tag.lower().split('}')[-1]  # Remove namespace
+                            field_name = field.tag.lower().split('}')[-1]
                             
-                            # Check if field name suggests it's a status field
-                            if any(keyword in field_name for keyword in ['status', 'state', 'recruitment']):
-                                # Check if the text looks like a valid status
-                                if any(valid_status in text.lower() for valid_status in valid_statuses):
-                                    status = text
-                                    break
-                            # Check if text content looks like a status (short text only)
-                            elif (len(text) < 50 and  # Status should be short
-                                  any(valid_status in text.lower() for valid_status in valid_statuses)):
+                            # Check if field contains status-like value
+                            if (len(text) < 100 and  # Status should be relatively short
+                                any(valid_status in text.lower() for valid_status in valid_statuses)):
                                 status = text
+                                if trials_found < 3:
+                                    print(f"   ✅ Found status-like value in {field_name}: '{status}'")
                                 break
+                
+                # Third, look for field names containing status keywords
+                if not status:
+                    for field in isrctn_fields:
+                        if field.text and field.text.strip():
+                            text = field.text.strip()
+                            field_name = field.tag.lower().split('}')[-1]
+                            
+                            # Check if field name suggests it's status-related
+                            if (any(keyword in field_name for keyword in ['status', 'recruit', 'state']) and
+                                len(text) < 200):  # Reasonable status length
+                                status = text
+                                if trials_found < 3:
+                                    print(f"   ⚠️ Using field {field_name} for status: '{status[:50]}...'")
+                                break
+                
+                # Debug: Show what fields are available if no status found
+                if not status and trials_found < 3:
+                    available_fields = [field.tag.lower().split('}')[-1] for field in isrctn_fields 
+                                      if field.text and field.text.strip()]
+                    status_candidates = [f for f in available_fields 
+                                       if any(keyword in f for keyword in ['status', 'recruit', 'trial', 'phase'])]
+                    print(f"   ⚠️ No status found. Available status-related fields: {status_candidates}")
+                    print(f"   📋 Sample fields: {sorted(list(set(available_fields)))[:10]}...")
+                    
+                    # Use first reasonable field as fallback
+                    for field in isrctn_fields:
+                        field_name = field.tag.lower().split('}')[-1]
+                        if field_name in status_candidates and field.text and field.text.strip():
+                            status = field.text.strip()[:100]  # Limit length
+                            print(f"   🔄 Fallback status from {field_name}: '{status}'")
+                            break
                 
                 # Find dates - ENHANCED: Prioritize official lastUpdated attribute
                 latest_date = None
