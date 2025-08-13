@@ -1,0 +1,52 @@
+name: Update EU bladder sites
+
+on:
+  workflow_dispatch:    # allow manual runs from the Actions tab
+  schedule:
+    - cron: "0 6 * * 1" # every Monday 06:00 UTC
+
+permissions:
+  contents: write       # needed so the action can push changes
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests pandas openpyxl
+
+      - name: Ensure script exists (download if missing)
+        shell: bash
+        run: |
+          if [ ! -f pull_ctgov_eu_bladder_sites.py ]; then
+            echo "Script not found in repo. Downloading copy..."
+            curl -L -o pull_ctgov_eu_bladder_sites.py "https://raw.githubusercontent.com/your-username/your-repo/main/pull_ctgov_eu_bladder_sites.py"
+          fi
+          chmod +x pull_ctgov_eu_bladder_sites.py
+
+      - name: Run script
+        run: |
+          mkdir -p data
+          python pull_ctgov_eu_bladder_sites.py --outfile data/eu_bladder_sites_from_ctgov.csv --xlsx
+
+      - name: Commit changes (if any)
+        run: |
+          if git status --porcelain | grep -qE "data/eu_bladder_sites_from_ctgov\.csv|data/eu_bladder_sites_from_ctgov\.xlsx"; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add data/eu_bladder_sites_from_ctgov.csv data/eu_bladder_sites_from_ctgov.xlsx || true
+            git commit -m "Auto-update EU bladder sites CSV/XLSX"
+            git push
+          else
+            echo "No changes to commit."
+          fi
