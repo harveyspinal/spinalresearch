@@ -1,12 +1,12 @@
 name: Update EU bladder sites
 
 on:
-  workflow_dispatch:    # allow manual runs from the Actions tab
+  workflow_dispatch:    # manual runs from the Actions tab
   schedule:
-    - cron: "0 6 * * 1" # every Monday 06:00 UTC
+    - cron: "0 6 * * 1" # every Monday at 06:00 UTC
 
 permissions:
-  contents: write       # needed so the action can push changes
+  contents: write
 
 jobs:
   run-script:
@@ -25,19 +25,40 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests pandas openpyxl
 
-      - name: Ensure script exists (download if missing)
+      # If the script is in your repo, this step is unnecessary.
+      # If you want a fallback to download it, replace the URL below with your raw script URL.
+      - name: Ensure script exists (optional fallback)
         shell: bash
         run: |
           if [ ! -f pull_ctgov_eu_bladder_sites.py ]; then
-            echo "Script not found in repo. Downloading copy..."
+            echo "Script not found at repo root. Downloading a copy (update this URL to your repo's raw link)..."
             curl -L -o pull_ctgov_eu_bladder_sites.py "https://raw.githubusercontent.com/your-username/your-repo/main/pull_ctgov_eu_bladder_sites.py"
           fi
           chmod +x pull_ctgov_eu_bladder_sites.py
 
-      - name: Run script
+      - name: Run script (attempt 1)
         run: |
           mkdir -p data
-          python pull_ctgov_eu_bladder_sites.py --outfile data/eu_bladder_sites_from_ctgov.csv --xlsx
+          python pull_ctgov_eu_bladder_sites.py \
+            --outfile data/eu_bladder_sites_from_ctgov.csv \
+            --xlsx \
+            --page-size 100 \
+            --max-retries 8 \
+            --retry-backoff 1.5 \
+            --timeout 90
+
+      - name: Run script (attempt 2 on failure)
+        if: failure()
+        run: |
+          echo "Retrying after a short pause..."
+          sleep 20
+          python pull_ctgov_eu_bladder_sites.py \
+            --outfile data/eu_bladder_sites_from_ctgov.csv \
+            --xlsx \
+            --page-size 75 \
+            --max-retries 12 \
+            --retry-backoff 2 \
+            --timeout 120
 
       - name: Commit changes (if any)
         run: |
@@ -49,4 +70,3 @@ jobs:
             git push
           else
             echo "No changes to commit."
-          fi
