@@ -1,9 +1,9 @@
 name: Update EU bladder sites
 
 on:
-  workflow_dispatch:    # manual runs from the Actions tab
+  workflow_dispatch:
   schedule:
-    - cron: "0 6 * * 1" # every Monday at 06:00 UTC
+    - cron: "0 6 * * 1" # every Monday 06:00 UTC
 
 permissions:
   contents: write
@@ -25,8 +25,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests pandas openpyxl
 
-      # If the script is in your repo, this step is unnecessary.
-      # If you want a fallback to download it, replace the URL below with your raw script URL.
       - name: Ensure script exists (optional fallback)
         shell: bash
         run: |
@@ -60,13 +58,28 @@ jobs:
             --retry-backoff 2 \
             --timeout 120
 
-      - name: Commit changes (if any)
+      # ---- safer change detection & commit flow ----
+      - name: Stage outputs
         run: |
-          if git status --porcelain | grep -qE "data/eu_bladder_sites_from_ctgov\.csv|data/eu_bladder_sites_from_ctgov\.xlsx"; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add data/eu_bladder_sites_from_ctgov.csv data/eu_bladder_sites_from_ctgov.xlsx || true
-            git commit -m "Auto-update EU bladder sites CSV/XLSX"
-            git push
+          git add -A data/eu_bladder_sites_from_ctgov.csv data/eu_bladder_sites_from_ctgov.xlsx || true
+
+      - name: Check for staged changes
+        id: detect
+        run: |
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            echo "No changes to commit."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push (if changed)
+        if: steps.detect.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "Auto-update EU bladder sites CSV/XLSX"
+          git push
+
+      - name: No changes
+        if: steps.detect.outputs.changed != 'true'
+        run: echo "No changes to commit."
