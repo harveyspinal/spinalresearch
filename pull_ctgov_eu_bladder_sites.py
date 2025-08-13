@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 """
-pull_ctgov_eu_bladder_sites.py — ClinicalTrials.gov v2 API puller (with investigators)
+pull_ctgov_eu_bladder_sites.py — ClinicalTrials.gov v2 API puller
+(with investigators + outcome measures)
 
-Adds investigator and contact columns:
-- Overall Officials: PI/Study Director/Chair (name, role, affiliation)
-- Site Contacts: names/roles listed for each site (if present)
+Adds to each row:
+- Overall Officials, Central Contacts, Site Contacts, Site Investigator(s)
+- Primary Outcome(s), Secondary Outcome(s), Other Outcome(s)
 
 Usage examples:
   python pull_ctgov_eu_bladder_sites.py --outfile data/eu_bladder_sites_from_ctgov.csv --xlsx
@@ -26,10 +27,10 @@ EUROPE_COUNTRIES = {
 }
 
 BASE = "https://clinicaltrials.gov/api/v2/studies"
-# Keep the payload small; ContactsLocationsModule includes officials/contacts/locations.
+# ContactsLocationsModule now brings overall officials/contacts/locations; OutcomesModule brings outcomes.
 FIELDS = ",".join([
     "NCTId","BriefTitle","OfficialTitle",
-    "Condition","ContactsLocationsModule",
+    "Condition","ContactsLocationsModule","OutcomesModule",
     "LocationFacility","LocationCity","LocationCountry","LocationStatus"
 ])
 
@@ -38,9 +39,6 @@ def build_query(terms, conditions):
     cond_clause  = " OR ".join(f'"{c}"' if " " in c else c for c in conditions)
     return f'({terms_clause}) AND ({cond_clause})'
 
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-
 def make_session(max_retries=8, backoff=1.5):
     retry = Retry(
         total=max_retries, connect=max_retries, read=max_retries, status=max_retries,
@@ -48,7 +46,7 @@ def make_session(max_retries=8, backoff=1.5):
         allowed_methods=["GET"], raise_on_status=False, respect_retry_after_header=True,
     )
     s = requests.Session()
-    s.headers.update({"User-Agent":"spinalresearch-eu-bladder-sites/1.1 (+github actions)","Accept":"application/json"})
+    s.headers.update({"User-Agent":"spinalresearch-eu-bladder-sites/1.2 (+github actions)","Accept":"application/json"})
     adapter = HTTPAdapter(max_retries=retry)
     s.mount("https://", adapter); s.mount("http://", adapter)
     return s
@@ -65,26 +63,36 @@ def fetch_page(session, page_token, query, page_size=100, timeout=90):
             last_err = e; time.sleep(2 + attempt*2)
     raise SystemExit(f"Failed calling ClinicalTrials.gov after retries: {last_err}")
 
-def fmt_overall_officials(overall_officials):
+def _fmt_people(list_of_dicts, name_key="name", role_key="role", affiliation_key=None):
     items = []
-    for o in overall_officials or []:
-        name = (o.get("name") or "").strip()
-        role = (o.get("role") or "").strip()
-        aff  = (o.get("affiliation") or "").strip()
-        if name or role or aff:
-            part = f"{role}: {name}" if role else name
-            if aff: part += f" ({aff})"
-            items.append(part)
+    for d in list_of_dicts or []:
+        nm = (d.get(name_key) or "").strip()
+        rl = (d.get(role_key) or "").strip()
+        aff = (d.get(affiliation_key) or "").strip() if affiliation_key else ""
+        if nm or rl or aff:
+            s = f"{rl}: {nm}" if rl else nm
+            if aff: s += f" ({aff})"
+            items.append(s)
     return "; ".join(items)
 
+def fmt_overall_officials(overall_officials):
+    return _fmt_people(overall_officials, name_key="name", role_key="role", affiliation_key="affiliation")
+
 def fmt_contacts(contacts):
-    items = []
-    for c in contacts or []:
-        nm = (c.get("name") or "").strip()
-        rl = (c.get("role") or "").strip()
-        if nm or rl:
-            items.append(f"{rl}: {nm}" if rl else nm)
-    return "; ".join(items)
+    return _fmt_people(contacts, name_key="name", role_key="role", affiliation_key=None)
+
+def fmt_outcomes(out_list):
+    """Flatten list of {measure, timeFrame, description} dicts to 'Measure [Timeframe] — Description'."""
+    parts = []
+    for o in out_list or []:
+        meas = (o.get("measure") or "").strip()
+        tf   = (o.get("timeFrame") or "").strip()
+        desc = (o.get("description") or "").strip()
+        bit = meas
+        if tf: bit += f" [{tf}]"
+        if desc: bit += f" — {desc}"
+        if bit: parts.append(bit)
+    return "; ".join(parts)
 
 def extract_rows(payload):
     rows = []
@@ -93,16 +101,23 @@ def extract_rows(payload):
         ident = proto.get("identificationModule", {}) or {}
         nct   = ident.get("nctId")
         title = ident.get("officialTitle") or ident.get("briefTitle")
-        conds = proto.get("conditionsModule", {}).get("conditions", []) or []
+        conds = proto.get("conditionsModule", {}).get("conditions", []) or {}
+
         clm   = proto.get("contactsLocationsModule", {}) or {}
+        outm  = proto.get("outcomesModule", {}) or {}
 
         overall_officials = fmt_overall_officials(clm.get("overallOfficials"))
         central_contacts  = fmt_contacts(clm.get("centralContacts"))
+
+        primary_outcomes   = fmt_outcomes(outm.get("primaryOutcomes"))
+        secondary_outcomes = fmt_outcomes(outm.get("secondaryOutcomes"))
+        other_outcomes     = fmt_outcomes(outm.get("otherOutcomes"))
 
         for loc in (clm.get("locations") or []):
             country = loc.get("country")
             if not country or country not in EUROPE_COUNTRIES: 
                 continue
+
             site_contacts = fmt_contacts(loc.get("contacts"))
             site_invs = []
             for key in ("investigators","investigator","siteInvestigators"):
@@ -111,11 +126,12 @@ def extract_rows(payload):
                         nm = (inv.get("name") or inv.get("fullName") or "").strip()
                         rl = (inv.get("role") or "").strip()
                         site_invs.append(f"{rl}: {nm}" if rl and nm else (nm or rl))
+
             rows.append({
                 "Hospital/Center": loc.get("facility"),
                 "City": loc.get("city"),
                 "Country": country,
-                "Condition(s)": "; ".join(conds),
+                "Condition(s)": "; ".join(conds) if isinstance(conds, list) else str(conds),
                 "Study Title": title,
                 "NCT ID": nct,
                 "Location Status": loc.get("status"),
@@ -123,11 +139,13 @@ def extract_rows(payload):
                 "Central Contacts": central_contacts,
                 "Site Contacts": site_contacts,
                 "Site Investigator(s)": "; ".join([x for x in site_invs if x]),
+                "Primary Outcome(s)": primary_outcomes,
+                "Secondary Outcome(s)": secondary_outcomes,
+                "Other Outcome(s)": other_outcomes,
             })
     return rows
 
 def main():
-    import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--outfile", default="eu_bladder_sites_from_ctgov.csv")
     ap.add_argument("--xlsx", action="store_true")
@@ -161,9 +179,11 @@ def main():
         time.sleep(args.sleep)
 
     df = pd.DataFrame(all_rows)
+
     # Ensure columns exist for robust cleanup
     for col in ["Study Title","Condition(s)","Hospital/Center","City","Country","NCT ID","Location Status",
-                "Overall Officials","Central Contacts","Site Contacts","Site Investigator(s)"]:
+                "Overall Officials","Central Contacts","Site Contacts","Site Investigator(s)",
+                "Primary Outcome(s)","Secondary Outcome(s)","Other Outcome(s)"]:
         if col not in df.columns: df[col] = ""
 
     # Keep rows where title or conditions mention at least one term
